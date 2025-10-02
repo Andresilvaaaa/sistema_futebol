@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Users, Check } from "lucide-react"
+import { Users, Check, Loader2 } from "lucide-react"
+import { playersService } from "@/lib/services"
+import { useToast } from "@/hooks/use-toast"
 
 interface ImportPlayersDialogProps {
   open: boolean
@@ -24,16 +26,49 @@ export function ImportPlayersDialog({
 }: ImportPlayersDialogProps) {
   const [players, setPlayers] = useState<Player[]>([])
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     if (open) {
-      const savedPlayers = localStorage.getItem("players")
-      if (savedPlayers) {
-        setPlayers(JSON.parse(savedPlayers))
-      }
-      setSelectedPlayers(new Set())
+      fetchPlayers()
     }
   }, [open])
+
+  const fetchPlayers = async () => {
+    setLoading(true)
+    try {
+      // Buscar jogadores ativos da API
+      const response = await playersService.getPlayers({ 
+        status: 'active',
+        page: 1,
+        per_page: 100 // Buscar todos os jogadores ativos
+      })
+      
+      // Converter para o formato esperado pelo componente
+       const formattedPlayers = response.data.map(player => ({
+         id: player.id.toString(),
+         name: player.name,
+         position: player.position,
+         phone: player.phone || '',
+         email: player.email || '',
+         monthlyFee: parseFloat(player.monthly_fee),
+         joinDate: player.join_date
+       }))
+      
+      setPlayers(formattedPlayers)
+      setSelectedPlayers(new Set())
+    } catch (error) {
+      console.error('Erro ao buscar jogadores:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os jogadores. Tente novamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handlePlayerToggle = (playerId: string) => {
     const newSelected = new Set(selectedPlayers)
@@ -91,31 +126,44 @@ export function ImportPlayersDialog({
           </div>
 
           <ScrollArea className="h-[300px] border rounded-md p-4">
-            <div className="space-y-3">
-              {players.map((player) => (
-                <div key={player.id} className="flex items-center space-x-3">
-                  <Checkbox
-                    id={player.id}
-                    checked={selectedPlayers.has(player.id)}
-                    onCheckedChange={() => handlePlayerToggle(player.id)}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{player.name}</span>
-                      <span className="text-xs bg-muted px-2 py-1 rounded">{player.position}</span>
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="ml-2 text-sm text-muted-foreground">Carregando jogadores...</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {players.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Nenhum jogador ativo encontrado.
+                  </p>
+                ) : (
+                  players.map((player) => (
+                    <div key={player.id} className="flex items-center space-x-3">
+                      <Checkbox
+                        id={player.id}
+                        checked={selectedPlayers.has(player.id)}
+                        onCheckedChange={() => handlePlayerToggle(player.id)}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{player.name}</span>
+                          <span className="text-xs bg-muted px-2 py-1 rounded">{player.position}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">R$ {player.monthlyFee}</p>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">R$ {player.monthlyFee}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  ))
+                )}
+              </div>
+            )}
           </ScrollArea>
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleImport} disabled={selectedPlayers.size === 0}>
+            <Button onClick={handleImport} disabled={selectedPlayers.size === 0 || loading}>
               <Check className="h-4 w-4 mr-2" />
               Importar {selectedPlayers.size} Jogador{selectedPlayers.size !== 1 ? "es" : ""}
             </Button>

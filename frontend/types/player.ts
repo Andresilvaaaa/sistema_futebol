@@ -5,7 +5,7 @@ export interface Player {
   phone: string
   email: string
   joinDate: string
-  status: "active" | "pending" | "delayed"
+  status: "active" | "pending" | "delayed" | "inactive" // Adicionado "inactive"
   monthlyFee: number
   isActive: boolean
 }

@@ -7,19 +7,25 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { MagicThemeToggle } from "@/components/magic-theme-toggle"
+import { useAuth } from "@/lib/auth"
 import { Users, Calendar, DollarSign, Receipt, Home, User, LogOut, Menu, X } from "lucide-react"
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: Home },
-  { name: "Jogadores", href: "/players", icon: Users },
-  { name: "Gestão Mensal", href: "/monthly", icon: Calendar },
-  { name: "Fluxo de Caixa", href: "/cashflow", icon: DollarSign },
-  { name: "Despesas", href: "/expenses", icon: Receipt },
+  { name: "Dashboard", href: "/dashboard", icon: Home },
+  { name: "Jogadores", href: "/dashboard/players", icon: Users },
+  { name: "Gestão Mensal", href: "/dashboard/monthly", icon: Calendar },
+  { name: "Fluxo de Caixa", href: "/dashboard/cashflow", icon: DollarSign },
+  { name: "Despesas", href: "/dashboard/expenses", icon: Receipt },
 ]
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
+  const { logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+  }
 
   return (
     <>
@@ -105,6 +111,7 @@ export function Sidebar() {
               variant="ghost"
               className="w-full justify-start gap-3 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
               size="sm"
+              onClick={handleLogout}
             >
               <LogOut className="h-4 w-4" />
               Sair

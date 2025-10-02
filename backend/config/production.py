@@ -14,12 +14,22 @@ class ProductionConfig:
     # Segurança (obrigatório definir via variáveis de ambiente)
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'CHANGE-ME-IN-PRODUCTION'
 
-    # Banco de dados
+    # Banco de dados - PostgreSQL
     SQLALCHEMY_DATABASE_URI = (
         os.environ.get('DATABASE_URL') or
-        'sqlite:///futebol_prod.db'
+        'postgresql://postgres:password@localhost:5432/futebol_prod'
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Configurações específicas do PostgreSQL para produção
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,      # Testa conexão antes de usar
+        'pool_recycle': 3600,       # Recria conexões a cada 1h
+        'pool_timeout': 30,         # Timeout para obter conexão
+        'pool_size': 10,            # Tamanho do pool de conexões
+        'max_overflow': 20,         # Conexões extras permitidas
+        'echo': False,              # Não mostrar SQL em produção
+    }
 
     # Upload de arquivos
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB

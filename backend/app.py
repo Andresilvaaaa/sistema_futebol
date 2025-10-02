@@ -9,8 +9,15 @@ import sys
 # Adicionar o diretório atual ao path para importações
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Importar create_app do __init__.py local
-from __init__ import create_app
+# Garantir que o diretório raiz do projeto esteja no sys.path
+# Isso permite importar o pacote 'backend' quando executado diretamente
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+# Importar create_app do pacote backend
+# Usamos import absoluto para funcionar quando o módulo é carregado como 'backend.app'
+from backend import create_app
 
 # Carregar variáveis de ambiente se disponível
 try:

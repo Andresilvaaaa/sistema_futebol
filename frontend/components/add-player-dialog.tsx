@@ -9,17 +9,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 
 interface AddPlayerDialogProps {
   onAddPlayer: (player: Omit<Player, "id">) => void
+  loading?: boolean
 }
 
-export function AddPlayerDialog({ onAddPlayer }: AddPlayerDialogProps) {
+export function AddPlayerDialog({ onAddPlayer, loading = false }: AddPlayerDialogProps) {
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
-    position: "",
+    position: "forward", // Set default position
     phone: "",
     email: "",
     monthlyFee: 150,
@@ -37,7 +38,7 @@ export function AddPlayerDialog({ onAddPlayer }: AddPlayerDialogProps) {
     onAddPlayer(newPlayer)
     setFormData({
       name: "",
-      position: "",
+      position: "forward", // Reset to default position
       phone: "",
       email: "",
       monthlyFee: 150,
@@ -79,10 +80,10 @@ export function AddPlayerDialog({ onAddPlayer }: AddPlayerDialogProps) {
                 <SelectValue placeholder="Selecione a posição" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Forward">Atacante</SelectItem>
-                <SelectItem value="Midfielder">Meio-campo</SelectItem>
-                <SelectItem value="Defender">Defensor</SelectItem>
-                <SelectItem value="Goalkeeper">Goleiro</SelectItem>
+                <SelectItem value="forward">Atacante</SelectItem>
+                <SelectItem value="midfielder">Meio-campo</SelectItem>
+                <SelectItem value="defender">Defensor</SelectItem>
+                <SelectItem value="goalkeeper">Goleiro</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -121,10 +122,19 @@ export function AddPlayerDialog({ onAddPlayer }: AddPlayerDialogProps) {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit">Adicionar</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adicionando...
+                </>
+              ) : (
+                'Adicionar'
+              )}
+            </Button>
           </div>
         </form>
       </DialogContent>

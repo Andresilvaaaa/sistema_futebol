@@ -8,15 +8,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2 } from "lucide-react"
 
 interface EditPlayerDialogProps {
   player: Player | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onEditPlayer: (player: Player) => void
+  loading?: boolean
 }
 
-export function EditPlayerDialog({ player, open, onOpenChange, onEditPlayer }: EditPlayerDialogProps) {
+export function EditPlayerDialog({ player, open, onOpenChange, onEditPlayer, loading = false }: EditPlayerDialogProps) {
   const [formData, setFormData] = useState({
     name: "",
     position: "",
@@ -80,10 +82,10 @@ export function EditPlayerDialog({ player, open, onOpenChange, onEditPlayer }: E
                 <SelectValue placeholder="Selecione a posição" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Forward">Atacante</SelectItem>
-                <SelectItem value="Midfielder">Meio-campo</SelectItem>
-                <SelectItem value="Defender">Defensor</SelectItem>
-                <SelectItem value="Goalkeeper">Goleiro</SelectItem>
+                <SelectItem value="forward">Atacante</SelectItem>
+                <SelectItem value="midfielder">Meio-campo</SelectItem>
+                <SelectItem value="defender">Defensor</SelectItem>
+                <SelectItem value="goalkeeper">Goleiro</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -122,10 +124,19 @@ export function EditPlayerDialog({ player, open, onOpenChange, onEditPlayer }: E
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit">Salvar Alterações</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                'Salvar Alterações'
+              )}
+            </Button>
           </div>
         </form>
       </DialogContent>

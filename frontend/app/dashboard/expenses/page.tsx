@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { TrendingDown, Calendar, DollarSign, Download } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import AuthGuard from "@/components/auth-guard"
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -76,7 +77,8 @@ export default function ExpensesPage() {
     .reduce((sum, expense) => sum + expense.amount, 0)
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <AuthGuard>
+      <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -138,7 +140,8 @@ export default function ExpensesPage() {
             <ExpenseCategoriesSummary expenses={expenses} />
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </AuthGuard>
   )
 }

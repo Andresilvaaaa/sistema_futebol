@@ -12,6 +12,7 @@ import { User, Building2, MapPin, Phone, Mail, Calendar, Save } from "lucide-rea
 import { getProfile, saveProfile, getInitials } from "@/lib/profile-storage"
 import type { UserProfile, ProfileFormData } from "@/types/profile"
 import { useToast } from "@/hooks/use-toast"
+import AuthGuard from "@/components/auth-guard"
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -106,7 +107,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <AuthGuard>
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Perfil</h1>
@@ -333,5 +335,6 @@ export default function ProfilePage() {
         </Card>
       </div>
     </div>
+    </AuthGuard>
   )
 }

@@ -12,7 +12,7 @@ export interface MonthlyPeriod {
 
 export interface MonthlyPlayer {
   id: string
-  playerId: string
+  playerId: string // Corrigido: string (UUID)
   monthlyPeriodId: string
   playerName: string
   position: string

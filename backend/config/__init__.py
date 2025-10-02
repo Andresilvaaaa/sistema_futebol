@@ -64,10 +64,13 @@ class DevelopmentConfig(BaseConfig):
     DEBUG = True
     TESTING = False
 
-    # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
-        'DATABASE_URL', 'sqlite:///futebol_dev.db'
-    )
+    # Database - SQLite para desenvolvimento (caminho absoluto)
+    # Usar o arquivo dentro de backend/instance para coincidir com dados existentes
+    # Construir caminho absoluto para evitar erros "unable to open database file"
+    _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _DEV_INSTANCE_DIR = os.path.join(_BACKEND_DIR, 'instance')
+    _DEV_DB_PATH = os.path.join(_DEV_INSTANCE_DIR, 'futebol_dev.db')
+    SQLALCHEMY_DATABASE_URI = f"sqlite:///{_DEV_DB_PATH.replace(os.sep, '/')}"
     SQLALCHEMY_ECHO = True  # SQL logging
 
     # Security (relaxed for development)
@@ -80,6 +83,11 @@ class DevelopmentConfig(BaseConfig):
     def init_app(app):
         """Development specific initialization"""
         BaseConfig.init_app(app)
+
+        # Garantir que o diretório instance existe para o SQLite
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        instance_dir = os.path.join(backend_dir, 'instance')
+        os.makedirs(instance_dir, exist_ok=True)
 
         import logging
         logging.basicConfig(
@@ -202,3 +210,22 @@ config = {
     'homolog': HomologConfig,
     'default': DevelopmentConfig
 }
+
+
+def get_config(env_name=None):
+    """
+    Retorna a classe de configuração baseada no ambiente
+    
+    Args:
+        env_name: Nome do ambiente (development, production, testing, homolog)
+                 Se None, usa FLASK_ENV ou 'development'
+    
+    Returns:
+        Classe de configuração apropriada
+    """
+    import os
+    
+    if env_name is None:
+        env_name = os.environ.get('FLASK_ENV', 'development')
+    
+    return config.get(env_name, config['default'])

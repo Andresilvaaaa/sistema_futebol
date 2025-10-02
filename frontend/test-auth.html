@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Autenticação</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 10px 0; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Teste de Autenticação - Sistema de Futebol</h1>
+    
+    <div class="container">
+        <h2>1. Login</h2>
+        <input type="text" id="username" placeholder="Username" value="admin">
+        <input type="password" id="password" placeholder="Password" value="admin123">
+        <button onclick="testLogin()">Fazer Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="container">
+        <h2>2. Testar API com Token</h2>
+        <button onclick="testPlayersAPI()">Buscar Jogadores</button>
+        <button onclick="testStatsAPI()">Buscar Estatísticas</button>
+        <div id="apiResult"></div>
+    </div>
+
+    <div class="container">
+        <h2>3. Status do Token</h2>
+        <button onclick="checkToken()">Verificar Token</button>
+        <button onclick="clearToken()">Limpar Token</button>
+        <div id="tokenStatus"></div>
+    </div>
+
+    <script>
+        let authToken = null;
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.access_token;
+                    // Armazena no cookie
+                    document.cookie = `futebol_token=${authToken}; path=/; max-age=3600`;
+                    resultDiv.innerHTML = `<div class="success">✅ Login realizado com sucesso!</div><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Erro no login: ${data.error || 'Erro desconhecido'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Erro de conexão: ${error.message}</div>`;
+            }
+        }
+
+        async function testPlayersAPI() {
+            const resultDiv = document.getElementById('apiResult');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">❌ Faça login primeiro!</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/api/players?per_page=100', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ Jogadores carregados com sucesso!</div><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Erro na API: ${data.error || 'Erro desconhecido'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Erro de conexão: ${error.message}</div>`;
+            }
+        }
+
+        async function testStatsAPI() {
+            const resultDiv = document.getElementById('apiResult');
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<div class="error">❌ Faça login primeiro!</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/api/stats/players', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ Estatísticas carregadas com sucesso!</div><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Erro na API: ${data.error || 'Erro desconhecido'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Erro de conexão: ${error.message}</div>`;
+            }
+        }
+
+        function checkToken() {
+            const resultDiv = document.getElementById('tokenStatus');
+            const cookieToken = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('futebol_token='))
+                ?.split('=')[1];
+
+            resultDiv.innerHTML = `
+                <div>
+                    <strong>Token em memória:</strong> ${authToken ? '✅ Presente' : '❌ Ausente'}<br>
+                    <strong>Token no cookie:</strong> ${cookieToken ? '✅ Presente' : '❌ Ausente'}<br>
+                    ${authToken ? `<pre>Token: ${authToken.substring(0, 50)}...</pre>` : ''}
+                </div>
+            `;
+        }
+
+        function clearToken() {
+            authToken = null;
+            document.cookie = 'futebol_token=; path=/; max-age=0';
+            document.getElementById('tokenStatus').innerHTML = '<div class="success">✅ Token limpo!</div>';
+        }
+
+        // Verifica token ao carregar a página
+        window.onload = function() {
+            const cookieToken = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('futebol_token='))
+                ?.split('=')[1];
+            
+            if (cookieToken) {
+                authToken = cookieToken;
+            }
+            
+            checkToken();
+        };
+    </script>
+</body>
+</html>

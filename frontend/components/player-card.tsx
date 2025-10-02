@@ -1,99 +1,114 @@
 "use client"
 
-import type { Player } from "@/types/player"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MoreHorizontal, Phone, Mail, Calendar } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { MoreHorizontal, Edit, Power, PowerOff } from "lucide-react"
+import { Player } from "@/types/player"
+import { playersService } from "@/lib/services/players"
+import { toast } from "sonner"
 
 interface PlayerCardProps {
   player: Player
   onEdit?: (player: Player) => void
-  onDelete?: (playerId: string) => void
+  onUpdate?: () => void
 }
 
-export function PlayerCard({ player, onEdit, onDelete }: PlayerCardProps) {
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-500"
-      case "pending":
-        return "bg-orange-500"
-      case "delayed":
-        return "bg-red-500"
-      default:
-        return "bg-gray-500"
+export function PlayerCard({ player, onEdit, onUpdate }: PlayerCardProps) {
+  const handleActivate = async () => {
+    try {
+      await playersService.activatePlayer(player.id)
+      toast.success("Jogador ativado com sucesso!")
+      onUpdate?.()
+    } catch (error) {
+      toast.error("Erro ao ativar jogador")
+      console.error("Erro ao ativar jogador:", error)
     }
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "active":
-        return "Em dia"
-      case "pending":
-        return "Pendente"
-      case "delayed":
-        return "Atrasado"
-      default:
-        return status
+  const handleDeactivate = async () => {
+    try {
+      await playersService.deactivatePlayer(player.id)
+      toast.success("Jogador inativado com sucesso!")
+      onUpdate?.()
+    } catch (error) {
+      toast.error("Erro ao inativar jogador")
+      console.error("Erro ao inativar jogador:", error)
     }
   }
+
+  const getStatusBadge = (status: string) => {
+    const statusMap = {
+      active: { label: "Ativo", variant: "default" as const },
+      inactive: { label: "Inativo", variant: "secondary" as const },
+      pending: { label: "Pendente", variant: "outline" as const },
+      suspended: { label: "Suspenso", variant: "destructive" as const },
+    }
+    
+    return statusMap[status as keyof typeof statusMap] || { label: status, variant: "outline" as const }
+  }
+
+  const statusInfo = getStatusBadge(player.status)
 
   return (
-    <Card className="p-6 hover:shadow-lg transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-12 h-12 rounded-full ${getStatusColor(player.status)} flex items-center justify-center text-white font-bold text-lg`}
-          >
-            {getInitials(player.name)}
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div className="flex items-center space-x-2">
+          <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-semibold">
+            {player.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs">
-              {player.position}
+          <div>
+            <h3 className="font-semibold text-sm">{player.name}</h3>
+            <Badge variant={statusInfo.variant} className="text-xs">
+              {statusInfo.label}
             </Badge>
           </div>
         </div>
+        
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Abrir menu</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit?.(player)}>Editar</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDelete?.(player.id)}>Remover</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit?.(player)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Editar
+            </DropdownMenuItem>
+            {player.status === 'active' ? (
+              <DropdownMenuItem onClick={handleDeactivate}>
+                <PowerOff className="mr-2 h-4 w-4" />
+                Inativar
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={handleActivate}>
+                <Power className="mr-2 h-4 w-4" />
+                Ativar
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="font-bold text-lg text-foreground">{player.name}</h3>
-
+      </CardHeader>
+      
+      <CardContent>
         <div className="space-y-2 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Phone className="h-4 w-4" />
-            <span>{player.phone}</span>
+          <div className="flex items-center">
+            <span className="font-medium">📞</span>
+            <span className="ml-2">{player.phone}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            <span>{player.email}</span>
+          <div className="flex items-center">
+            <span className="font-medium">✉️</span>
+            <span className="ml-2">{player.email}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            <span>Desde {player.joinDate}</span>
+          <div className="flex items-center">
+            <span className="font-medium">📅</span>
+            <span className="ml-2">Desde {new Date(player.created_at).toLocaleDateString('pt-BR')}</span>
           </div>
         </div>
-      </div>
+      </CardContent>
     </Card>
   )
 }

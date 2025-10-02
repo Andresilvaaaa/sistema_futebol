@@ -7,6 +7,7 @@ import { FinancialSummaryCards } from "@/components/financial-summary-cards"
 import { MonthlyBreakdown } from "@/components/monthly-breakdown"
 import { Button } from "@/components/ui/button"
 import { Filter, Download } from "lucide-react"
+import AuthGuard from "@/components/auth-guard"
 
 export default function CashFlowPage() {
   const [financials, setFinancials] = useState<MonthlyFinancials[]>([])
@@ -46,7 +47,8 @@ export default function CashFlowPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <AuthGuard>
+      <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -71,7 +73,8 @@ export default function CashFlowPage() {
 
         {/* Monthly Breakdown */}
         <MonthlyBreakdown financials={financials} />
+        </div>
       </div>
-    </div>
+    </AuthGuard>
   )
 }

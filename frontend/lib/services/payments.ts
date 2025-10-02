@@ -1,0 +1,493 @@
+/**
+ * Serviço para gerenciamento de pagamentos mensais
+ * Implementa todas as operações relacionadas a períodos mensais e pagamentos com tipagem forte
+ */
+
+import { api, StandardApiResponse, PaginatedApiResponse, ApiException } from '../api';
+import {
+  MonthlyPeriod,
+  MonthlyPlayer,
+  CasualPlayer,
+  CreateMonthlyPeriodRequest,
+  UpdateMonthlyPeriodRequest,
+  CreateCasualPlayerRequest,
+  UpdateCustomMonthlyFeeRequest,
+  MonthlyPaymentsFilters,
+  AddPlayersToMonthlyPeriodRequest
+} from '../../types/api';
+
+export class PaymentsService {
+  private readonly baseEndpoint = '/api/monthly-payments';
+
+  // === PERÍODOS MENSAIS ===
+
+  /**
+   * Lista períodos mensais com filtros e paginação
+   */
+  async getMonthlyPeriods(filters?: { year?: number; month?: number }): Promise<PaginatedApiResponse<MonthlyPeriod>> {
+    try {
+      const response = await api.get<PaginatedApiResponse<MonthlyPeriod>>(
+        this.baseEndpoint,
+        filters
+      );
+      
+      this.validatePaginatedResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError('Erro ao buscar períodos mensais', error);
+    }
+  }
+
+  /**
+   * Busca um período mensal específico por ID
+   */
+  async getMonthlyPeriod(id: string): Promise<StandardApiResponse<MonthlyPeriod>> {
+    if (!id?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+
+    try {
+      const response = await api.get<StandardApiResponse<MonthlyPeriod>>(
+        `${this.baseEndpoint}/${id}`
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao buscar período ${id}`, error);
+    }
+  }
+
+  /**
+   * Cria um novo período mensal
+   */
+  async createMonthlyPeriod(periodData: CreateMonthlyPeriodRequest): Promise<StandardApiResponse<MonthlyPeriod>> {
+    this.validateCreatePeriodData(periodData);
+
+    try {
+      const response = await api.post<StandardApiResponse<MonthlyPeriod>>(
+        this.baseEndpoint,
+        periodData
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError('Erro ao criar período mensal', error);
+    }
+  }
+
+  /**
+   * Atualiza um período mensal existente
+   */
+  async updateMonthlyPeriod(id: string, periodData: UpdateMonthlyPeriodRequest): Promise<StandardApiResponse<MonthlyPeriod>> {
+    if (!id?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+
+    this.validateUpdatePeriodData(periodData);
+
+    try {
+      const response = await api.put<StandardApiResponse<MonthlyPeriod>>(
+        `${this.baseEndpoint}/${id}`,
+        periodData
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao atualizar período ${id}`, error);
+    }
+  }
+
+  /**
+   * Remove um período mensal
+   */
+  async deleteMonthlyPeriod(id: string): Promise<StandardApiResponse<null>> {
+    if (!id?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+
+    try {
+      const response = await api.delete<StandardApiResponse<null>>(
+        `${this.baseEndpoint}/${id}`
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao remover período ${id}`, error);
+    }
+  }
+
+  // === JOGADORES MENSAIS ===
+
+  /**
+   * Lista jogadores de um período mensal com filtros
+   */
+  async getMonthlyPlayers(periodId: string, filters?: MonthlyPaymentsFilters): Promise<PaginatedApiResponse<MonthlyPlayer>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+
+    try {
+      const response = await api.get<PaginatedApiResponse<MonthlyPlayer>>(
+        `${this.baseEndpoint}/${periodId}/players`,
+        filters
+      );
+      
+      this.validatePaginatedResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao buscar jogadores do período ${periodId}`, error);
+    }
+  }
+
+  /**
+   * Adiciona jogadores a um período mensal
+   */
+  async addPlayersToMonthlyPeriod(periodId: string, playersData: AddPlayersToMonthlyPeriodRequest): Promise<StandardApiResponse<MonthlyPlayer[]>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+
+    this.validateAddPlayersData(playersData);
+
+    try {
+      const response = await api.post<StandardApiResponse<MonthlyPlayer[]>>(
+        `${this.baseEndpoint}/${periodId}/players`,
+        playersData
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao adicionar jogadores ao período ${periodId}`, error);
+    }
+  }
+
+  /**
+   * Atualiza o status de pagamento de um jogador mensal
+   */
+  async updateMonthlyPlayerPayment(periodId: string, playerId: string, status: 'paid' | 'pending' | 'overdue'): Promise<StandardApiResponse<MonthlyPlayer>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+    if (!playerId?.trim()) {
+      throw new ApiException('ID do jogador é obrigatório', 400);
+    }
+    if (!['paid', 'pending', 'overdue'].includes(status)) {
+      throw new ApiException('Status deve ser "paid", "pending" ou "overdue"', 400);
+    }
+
+    try {
+      const response = await api.patch<StandardApiResponse<MonthlyPlayer>>(
+        `${this.baseEndpoint}/${periodId}/players/${playerId}/payment`,
+        { status }
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao atualizar pagamento do jogador ${playerId}`, error);
+    }
+  }
+
+  /**
+   * Atualiza a mensalidade customizada de um jogador
+   */
+  async updateCustomMonthlyFee(periodId: string, playerId: string, feeData: UpdateCustomMonthlyFeeRequest): Promise<StandardApiResponse<MonthlyPlayer>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+    if (!playerId?.trim()) {
+      throw new ApiException('ID do jogador é obrigatório', 400);
+    }
+
+    this.validateCustomFeeData(feeData);
+
+    try {
+      const response = await api.patch<StandardApiResponse<MonthlyPlayer>>(
+        `${this.baseEndpoint}/${periodId}/players/${playerId}/custom-fee`,
+        feeData
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao atualizar mensalidade customizada do jogador ${playerId}`, error);
+    }
+  }
+
+  /**
+   * Remove um jogador de um período mensal
+   */
+  async removePlayerFromMonthlyPeriod(periodId: string, playerId: string): Promise<StandardApiResponse<null>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+    if (!playerId?.trim()) {
+      throw new ApiException('ID do jogador é obrigatório', 400);
+    }
+
+    try {
+      const response = await api.delete<StandardApiResponse<null>>(
+        `${this.baseEndpoint}/${periodId}/players/${playerId}`
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao remover jogador ${playerId} do período ${periodId}`, error);
+    }
+  }
+
+  // === JOGADORES AVULSOS ===
+
+  /**
+   * Lista jogadores avulsos de um período mensal
+   */
+  async getCasualPlayers(periodId: string): Promise<StandardApiResponse<CasualPlayer[]>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+
+    try {
+      const response = await api.get<StandardApiResponse<CasualPlayer[]>>(
+        `${this.baseEndpoint}/${periodId}/casual-players`
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao buscar jogadores avulsos do período ${periodId}`, error);
+    }
+  }
+
+  /**
+   * Adiciona um jogador avulso a um período mensal
+   */
+  async addCasualPlayer(periodId: string, casualPlayerData: CreateCasualPlayerRequest): Promise<StandardApiResponse<CasualPlayer>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+
+    this.validateCasualPlayerData(casualPlayerData);
+
+    try {
+      const response = await api.post<StandardApiResponse<CasualPlayer>>(
+        `${this.baseEndpoint}/${periodId}/casual-players`,
+        casualPlayerData
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao adicionar jogador avulso ao período ${periodId}`, error);
+    }
+  }
+
+  /**
+   * Remove um jogador avulso de um período mensal
+   */
+  async removeCasualPlayer(periodId: string, casualPlayerId: string): Promise<StandardApiResponse<null>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+    if (!casualPlayerId?.trim()) {
+      throw new ApiException('ID do jogador avulso é obrigatório', 400);
+    }
+
+    try {
+      const response = await api.delete<StandardApiResponse<null>>(
+        `${this.baseEndpoint}/${periodId}/casual-players/${casualPlayerId}`
+      );
+      
+      this.validateStandardResponse(response);
+      
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(`Erro ao remover jogador avulso ${casualPlayerId}`, error);
+    }
+  }
+
+  // === MÉTODOS PRIVADOS DE VALIDAÇÃO ===
+
+  /**
+   * Valida dados para criação de período mensal
+   */
+  private validateCreatePeriodData(data: CreateMonthlyPeriodRequest): void {
+    const errors: string[] = [];
+
+    if (!data.year || data.year < 2020 || data.year > 2030) {
+      errors.push('Ano deve estar entre 2020 e 2030');
+    }
+
+    if (!data.month || data.month < 1 || data.month > 12) {
+      errors.push('Mês deve estar entre 1 e 12');
+    }
+
+    if (data.monthly_fee !== undefined && (data.monthly_fee < 0 || data.monthly_fee > 9999.99)) {
+      errors.push('Mensalidade deve estar entre 0 e 9999.99');
+    }
+
+    if (errors.length > 0) {
+      throw new ApiException('Dados inválidos para criação do período', 400, { errors });
+    }
+  }
+
+  /**
+   * Valida dados para atualização de período mensal
+   */
+  private validateUpdatePeriodData(data: UpdateMonthlyPeriodRequest): void {
+    const errors: string[] = [];
+
+    if (data.monthly_fee !== undefined && (data.monthly_fee < 0 || data.monthly_fee > 9999.99)) {
+      errors.push('Mensalidade deve estar entre 0 e 9999.99');
+    }
+
+    if (data.status && !['active', 'closed'].includes(data.status)) {
+      errors.push('Status deve ser "active" ou "closed"');
+    }
+
+    if (errors.length > 0) {
+      throw new ApiException('Dados inválidos para atualização do período', 400, { errors });
+    }
+  }
+
+  /**
+   * Valida dados para adicionar jogadores ao período
+   */
+  private validateAddPlayersData(data: AddPlayersToMonthlyPeriodRequest): void {
+    const errors: string[] = [];
+
+    if (!data.player_ids || !Array.isArray(data.player_ids) || data.player_ids.length === 0) {
+      errors.push('Lista de IDs de jogadores é obrigatória');
+    }
+
+    if (data.player_ids?.some(id => !id?.trim())) {
+      errors.push('Todos os IDs de jogadores devem ser válidos');
+    }
+
+    if (errors.length > 0) {
+      throw new ApiException('Dados inválidos para adicionar jogadores', 400, { errors });
+    }
+  }
+
+  /**
+   * Valida dados de mensalidade customizada
+   */
+  private validateCustomFeeData(data: UpdateCustomMonthlyFeeRequest): void {
+    const errors: string[] = [];
+
+    if (data.custom_monthly_fee !== undefined && (data.custom_monthly_fee < 0 || data.custom_monthly_fee > 9999.99)) {
+      errors.push('Mensalidade customizada deve estar entre 0 e 9999.99');
+    }
+
+    if (errors.length > 0) {
+      throw new ApiException('Dados inválidos para mensalidade customizada', 400, { errors });
+    }
+  }
+
+  /**
+   * Valida dados de jogador avulso
+   */
+  private validateCasualPlayerData(data: CreateCasualPlayerRequest): void {
+    const errors: string[] = [];
+
+    if (!data.player_name?.trim()) {
+      errors.push('Nome do jogador é obrigatório');
+    }
+
+    if (data.amount !== undefined && (data.amount < 0 || data.amount > 9999.99)) {
+      errors.push('Valor deve estar entre 0 e 9999.99');
+    }
+
+    if (data.play_date && isNaN(Date.parse(data.play_date))) {
+      errors.push('Data de jogo deve ser uma data válida');
+    }
+
+    if (errors.length > 0) {
+      throw new ApiException('Dados inválidos para jogador avulso', 400, { errors });
+    }
+  }
+
+  /**
+   * Valida resposta padrão da API
+   */
+  private validateStandardResponse<T>(response: StandardApiResponse<T>): void {
+    if (!response || typeof response !== 'object') {
+      throw new ApiException('Resposta da API inválida', 500);
+    }
+
+    if (!response.success) {
+      throw new ApiException(
+        response.message || 'Operação falhou',
+        500,
+        response,
+        response.errors
+      );
+    }
+  }
+
+  /**
+   * Valida resposta paginada da API
+   */
+  private validatePaginatedResponse<T>(response: PaginatedApiResponse<T>): void {
+    this.validateStandardResponse(response);
+
+    if (!response.pagination || typeof response.pagination !== 'object') {
+      throw new ApiException('Dados de paginação inválidos', 500);
+    }
+
+    const { pagination } = response;
+    if (
+      typeof pagination.page !== 'number' ||
+      typeof pagination.pages !== 'number' ||
+      typeof pagination.per_page !== 'number' ||
+      typeof pagination.total !== 'number'
+    ) {
+      throw new ApiException('Estrutura de paginação inválida', 500);
+    }
+  }
+
+  /**
+   * Trata erros do serviço de forma consistente
+   */
+  private handleServiceError(message: string, error: unknown): ApiException {
+    if (error instanceof ApiException) {
+      return error;
+    }
+
+    if (error instanceof Error) {
+      return new ApiException(
+        `${message}: ${error.message}`,
+        500,
+        { originalError: error }
+      );
+    }
+
+    return new ApiException(
+      `${message}: Erro desconhecido`,
+      500,
+      { originalError: error }
+    );
+  }
+}
+
+// Instância singleton do serviço
+export const paymentsService = new PaymentsService();
+
+export default paymentsService;

@@ -2,9 +2,10 @@
 
 import type { Player } from "@/types/player"
 import { Button } from "@/components/ui/button"
-import { MoreHorizontal, Phone, Mail, Calendar } from "lucide-react"
+import { MoreHorizontal, Phone, Mail, Calendar, Loader2, Edit, Power, PowerOff } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
 
 interface PlayersTableProps {
   players: Player[]
@@ -12,9 +13,10 @@ interface PlayersTableProps {
   onDeactivate?: (playerId: string) => void
   onActivate?: (playerId: string) => void
   showInactive?: boolean
+  actionLoading?: string | null
 }
 
-export function PlayersTable({ players, onEdit, onDeactivate, onActivate, showInactive = false }: PlayersTableProps) {
+export function PlayersTable({ players, onEdit, onDeactivate, onActivate, showInactive = false, actionLoading }: PlayersTableProps) {
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -29,6 +31,17 @@ export function PlayersTable({ players, onEdit, onDeactivate, onActivate, showIn
     return colors[index]
   }
 
+  const getStatusBadge = (status: string) => {
+    const statusMap = {
+      active: { label: "Ativo", variant: "default" as const },
+      inactive: { label: "Inativo", variant: "secondary" as const },
+      pending: { label: "Pendente", variant: "outline" as const },
+      suspended: { label: "Suspenso", variant: "destructive" as const },
+    }
+    
+    return statusMap[status as keyof typeof statusMap] || { label: status, variant: "outline" as const }
+  }
+
   return (
     <div className="border rounded-lg">
       <Table>
@@ -37,60 +50,92 @@ export function PlayersTable({ players, onEdit, onDeactivate, onActivate, showIn
             <TableHead className="w-[60px]">#</TableHead>
             <TableHead>Jogador</TableHead>
             <TableHead>Contato</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Desde</TableHead>
             <TableHead className="w-[50px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {players.map((player, index) => (
-            <TableRow key={player.id}>
-              <TableCell>
-                <div
-                  className={`w-8 h-8 rounded-full ${getAvatarColor(player.name)} flex items-center justify-center text-white font-bold text-xs`}
-                >
-                  {getInitials(player.name)}
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="font-medium">{player.name}</div>
-              </TableCell>
-              <TableCell>
-                <div className="space-y-1 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Phone className="h-3 w-3" />
-                    <span>{player.phone}</span>
+          {players.map((player, index) => {
+            const statusInfo = getStatusBadge(player.status)
+            
+            return (
+              <TableRow key={player.id}>
+                <TableCell>
+                  <div
+                    className={`w-8 h-8 rounded-full ${getAvatarColor(player.name)} flex items-center justify-center text-white font-bold text-xs`}
+                  >
+                    {getInitials(player.name)}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Mail className="h-3 w-3" />
-                    <span>{player.email}</span>
+                </TableCell>
+                <TableCell>
+                  <div className="font-medium">{player.name}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Phone className="h-3 w-3" />
+                      <span>{player.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Mail className="h-3 w-3" />
+                      <span>{player.email}</span>
+                    </div>
                   </div>
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Calendar className="h-3 w-3" />
-                  <span>{player.joinDate}</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit?.(player)}>Editar</DropdownMenuItem>
-                    {showInactive ? (
-                      <DropdownMenuItem onClick={() => onActivate?.(player.id)}>Reativar</DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem onClick={() => onDeactivate?.(player.id)}>Inativar</DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={statusInfo.variant} className="text-xs">
+                    {statusInfo.label}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Calendar className="h-3 w-3" />
+                    <span>{new Date(player.created_at).toLocaleDateString('pt-BR')}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" disabled={actionLoading === `edit-${player.id}` || actionLoading === `${showInactive ? 'activate' : 'deactivate'}-${player.id}`}>
+                        {(actionLoading === `edit-${player.id}` || actionLoading === `${showInactive ? 'activate' : 'deactivate'}-${player.id}`) ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MoreHorizontal className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem 
+                        onClick={() => onEdit?.(player)}
+                        disabled={actionLoading === `edit-${player.id}` || actionLoading === `${showInactive ? 'activate' : 'deactivate'}-${player.id}`}
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        Editar
+                      </DropdownMenuItem>
+                      {player.status === 'active' ? (
+                        <DropdownMenuItem 
+                          onClick={() => onDeactivate?.(player.id)}
+                          disabled={actionLoading === `deactivate-${player.id}` || actionLoading === `edit-${player.id}`}
+                        >
+                          <PowerOff className="mr-2 h-4 w-4" />
+                          Inativar
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem 
+                          onClick={() => onActivate?.(player.id)}
+                          disabled={actionLoading === `activate-${player.id}` || actionLoading === `edit-${player.id}`}
+                        >
+                          <Power className="mr-2 h-4 w-4" />
+                          Ativar
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>
