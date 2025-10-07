@@ -404,6 +404,36 @@ export default function MonthlyPage() {
     }
   }
 
+  const handleUpdateCasualPlayerStatus = async (casualPlayerId: string, status: "paid" | "pending") => {
+    if (!currentPeriod) {
+      toast({
+        title: "Erro",
+        description: "Nenhum período selecionado",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await paymentsService.updateCasualPlayerPayment(currentPeriod.id, casualPlayerId, status)
+
+      toast({
+        title: "Status atualizado",
+        description: `Pagamento do avulso marcado como ${status === "paid" ? "pago" : "pendente"}`,
+      })
+
+      // Recarregar dados para refletir estatísticas e listas
+      await loadMonthlyData()
+    } catch (error) {
+      console.error("Erro ao atualizar status do jogador avulso:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar o status do jogador avulso",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleMonthChange = (month: number, year: number) => {
     setCurrentMonth(month)
     setCurrentYear(year)
@@ -706,6 +736,7 @@ export default function MonthlyPage() {
           casualPlayers={currentPeriodCasualPlayers}
           monthName={formatMonthYear(currentMonth, currentYear)}
           onRemoveCasualPlayer={handleRemoveCasualPlayer}
+          onUpdateCasualPlayerStatus={handleUpdateCasualPlayerStatus}
         />
 
         <MonthlyFeeAdjustmentDialog

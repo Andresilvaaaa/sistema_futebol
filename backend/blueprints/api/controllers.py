@@ -716,9 +716,9 @@ def update_monthly_player_payment(period_id, player_id):
     else:
         monthly_player.payment_date = None
 
-    # Recalcular total_received do período considerando taxa efetiva
+    # Recalcular total_received do período considerando taxa efetiva e avulsos pagos
     period = monthly_player.monthly_period
-    total_received = db.session.query(
+    total_monthly_received = db.session.query(
         db.func.sum(
             db.func.coalesce(MonthlyPlayer.custom_monthly_fee, MonthlyPlayer.monthly_fee)
         )
@@ -728,7 +728,17 @@ def update_monthly_player_payment(period_id, player_id):
             MonthlyPlayer.status == PaymentStatus.PAID.value
         )
     ).scalar() or 0
-    period.total_received = total_received
+
+    total_casual_received = db.session.query(
+        db.func.sum(CasualPlayer.amount)
+    ).filter(
+        and_(
+            CasualPlayer.monthly_period_id == period.id,
+            CasualPlayer.status == PaymentStatus.PAID.value
+        )
+    ).scalar() or 0
+
+    period.total_received = (total_monthly_received or 0) + (total_casual_received or 0)
 
     db.session.commit()
 
@@ -1213,6 +1223,93 @@ def create_casual_player(period_id):
         db.session.rollback()
         print(f"[ERROR][create_casual_player] erro ao criar jogador casual: {str(e)}")
         return APIResponse.error(f'Erro ao adicionar jogador avulso: {str(e)}', 500)
+
+@api_bp.route('/monthly-periods/<period_id>/casual-players/<casual_player_id>/payment', methods=['PATCH'])
+@jwt_required()
+@handle_api_error
+def update_casual_player_payment(period_id, casual_player_id):
+    """
+    Atualiza o status de pagamento de um jogador avulso (CasualPlayer) em um período.
+
+    Request body: { "status": "paid" | "pending" }
+    - Define payment_date automaticamente ao marcar como 'paid'
+    - Recalcula o total_received do MonthlyPeriod incluindo avulsos pagos
+    - Retorna o CasualPlayer serializado em formato consistente com listagem
+    """
+    print(f"[DEBUG][update_casual_player_payment] period_id={period_id} casual_player_id={casual_player_id}")
+
+    # Verificar se o período existe
+    period = MonthlyPeriod.query.get(period_id)
+    if not period:
+        raise ValidationError('Período não encontrado')
+
+    # Buscar o jogador casual pelo par (period_id, casual_player_id)
+    casual_player = CasualPlayer.query.filter_by(
+        id=casual_player_id,
+        monthly_period_id=period_id
+    ).first()
+
+    if not casual_player:
+        raise ValidationError('Jogador avulso não encontrado para o período informado')
+
+    data = request.json or {}
+    print(f"[DEBUG][update_casual_player_payment] payload recebido={data}")
+    status = data.get('status')
+
+    allowed_statuses = [PaymentStatus.PAID.value, PaymentStatus.PENDING.value]
+    if status not in allowed_statuses:
+        raise ValidationError(f"Status deve ser um dos: {allowed_statuses}")
+
+    # Atualizar status e data de pagamento
+    casual_player.status = status
+    if status == PaymentStatus.PAID.value:
+        casual_player.payment_date = datetime.utcnow()
+    else:
+        casual_player.payment_date = None
+
+    # Recalcular total_received do período (mensal pagos + avulsos pagos)
+    total_monthly_received = db.session.query(
+        db.func.sum(
+            db.func.coalesce(MonthlyPlayer.custom_monthly_fee, MonthlyPlayer.monthly_fee)
+        )
+    ).filter(
+        and_(
+            MonthlyPlayer.monthly_period_id == period.id,
+            MonthlyPlayer.status == PaymentStatus.PAID.value
+        )
+    ).scalar() or 0
+
+    total_casual_received = db.session.query(
+        db.func.sum(CasualPlayer.amount)
+    ).filter(
+        and_(
+            CasualPlayer.monthly_period_id == period.id,
+            CasualPlayer.status == PaymentStatus.PAID.value
+        )
+    ).scalar() or 0
+
+    period.total_received = (total_monthly_received or 0) + (total_casual_received or 0)
+
+    db.session.commit()
+
+    result = {
+        'id': casual_player.id,
+        'monthly_period_id': casual_player.monthly_period_id,
+        'player_name': casual_player.player_name,
+        'play_date': casual_player.play_date.isoformat(),
+        'invited_by': casual_player.invited_by,
+        'amount': float(casual_player.amount),
+        'payment_date': casual_player.payment_date.isoformat() if casual_player.payment_date else None,
+        'status': casual_player.status,
+        'created_at': casual_player.created_at.isoformat(),
+        'updated_at': casual_player.updated_at.isoformat()
+    }
+
+    print(f"[DEBUG][update_casual_player_payment] resposta gerada={result}")
+    return APIResponse.success(
+        data=result,
+        message='Status de pagamento do avulso atualizado com sucesso'
+    )
 
 
 @api_bp.route('/monthly-periods/<period_id>/casual-players/<casual_player_id>', methods=['DELETE'])

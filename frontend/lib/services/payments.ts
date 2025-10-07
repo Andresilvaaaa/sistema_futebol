@@ -376,6 +376,41 @@ export class PaymentsService {
     }
   }
 
+  /**
+   * Atualiza o status de pagamento de um jogador avulso
+   */
+  async updateCasualPlayerPayment(
+    periodId: string,
+    casualPlayerId: string,
+    status: 'paid' | 'pending'
+  ): Promise<StandardApiResponse<CasualPlayer>> {
+    if (!periodId?.trim()) {
+      throw new ApiException('ID do período é obrigatório', 400);
+    }
+    if (!casualPlayerId?.trim()) {
+      throw new ApiException('ID do jogador avulso é obrigatório', 400);
+    }
+    if (!['paid', 'pending'].includes(status)) {
+      throw new ApiException('Status deve ser "paid" ou "pending"', 400);
+    }
+
+    try {
+      const response = await api.patch<StandardApiResponse<CasualPlayer>>(
+        `${this.baseEndpoint}/${periodId}/casual-players/${casualPlayerId}/payment`,
+        { status }
+      );
+
+      this.validateStandardResponse(response);
+
+      return response;
+    } catch (error) {
+      throw this.handleServiceError(
+        `Erro ao atualizar pagamento do avulso ${casualPlayerId}`,
+        error
+      );
+    }
+  }
+
   // === MÉTODOS PRIVADOS DE VALIDAÇÃO ===
 
   /**
