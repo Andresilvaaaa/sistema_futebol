@@ -58,16 +58,16 @@ export class ExpensesService {
         throw new ApiException('Dados da despesa são obrigatórios', 400);
       }
 
-      const response = await api.post<Expense>(
+      // Validar e normalizar dados antes do envio (converte data para ISO)
+      this.validateExpenseData(expenseData)
+
+      const response = await api.post<StandardApiResponse<Expense>>( 
         `${this.baseEndpoint}/${periodId}/expenses`,
         expenseData
       );
 
-      return {
-        success: true,
-        data: response,
-        message: 'Despesa criada com sucesso'
-      };
+      // O cliente API já retorna a resposta padronizada do backend
+      return response;
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;
@@ -97,16 +97,15 @@ export class ExpensesService {
         throw new ApiException('Dados da despesa são obrigatórios', 400);
       }
 
-      const response = await api.put<Expense>(
+      // Validação flexível para atualizações (permite campos parciais)
+      this.validateUpdateExpenseData(expenseData);
+
+      const response = await api.put<StandardApiResponse<Expense>>(
         `${this.baseEndpoint}/${periodId}/expenses/${expenseId}`,
         expenseData
       );
 
-      return {
-        success: true,
-        data: response,
-        message: 'Despesa atualizada com sucesso'
-      };
+      return response;
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;
@@ -144,6 +143,50 @@ export class ExpensesService {
   }
 
   /**
+   * Converte data do formato brasileiro (DD/MM/YYYY ou DD/MM/YY) para ISO (YYYY-MM-DD)
+   */
+  private convertDateToISO(dateString: string): string {
+    // Remove espaços em branco para evitar falhas de validação
+    dateString = (dateString || '').trim();
+    // Se já está no formato ISO (YYYY-MM-DD), retorna como está
+    const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (isoRegex.test(dateString)) {
+      return dateString;
+    }
+
+    // Se está no formato brasileiro (DD/MM/YYYY ou DD/MM/YY)
+    const brRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/;
+    const match = dateString.match(brRegex);
+    
+    if (match) {
+      let [, day, month, year] = match;
+      
+      // Converte ano de 2 dígitos para 4 dígitos
+      if (year.length === 2) {
+        const currentYear = new Date().getFullYear();
+        const currentCentury = Math.floor(currentYear / 100) * 100;
+        const yearNum = parseInt(year);
+        
+        // Se o ano for menor que 50, assume século atual, senão século anterior
+        if (yearNum <= 50) {
+          year = (currentCentury + yearNum).toString();
+        } else {
+          year = (currentCentury - 100 + yearNum).toString();
+        }
+      }
+      
+      // Adiciona zeros à esquerda se necessário
+      day = day.padStart(2, '0');
+      month = month.padStart(2, '0');
+      
+      return `${year}-${month}-${day}`;
+    }
+
+    // Se não conseguiu converter, retorna a string original
+    return dateString;
+  }
+
+  /**
    * Valida dados de despesa antes do envio
    */
   private validateExpenseData(data: CreateExpenseRequest | UpdateExpenseRequest): void {
@@ -163,10 +206,64 @@ export class ExpensesService {
       throw new ApiException('Data da despesa é obrigatória', 400);
     }
 
+    // Converte a data para formato ISO se necessário
+    data.expense_date = this.convertDateToISO(data.expense_date);
+
     // Validar formato da data (YYYY-MM-DD)
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(data.expense_date)) {
-      throw new ApiException('Data deve estar no formato YYYY-MM-DD', 400);
+      throw new ApiException('Data deve estar no formato DD/MM/YYYY, DD/MM/YY ou YYYY-MM-DD', 400);
+    }
+
+    // Validar se a data é válida
+    const dateObj = new Date(data.expense_date);
+    if (isNaN(dateObj.getTime())) {
+      throw new ApiException('Data inválida', 400);
+    }
+  }
+
+  /**
+   * Valida dados para atualização (campos opcionais permitidos)
+   */
+  private validateUpdateExpenseData(data: Partial<UpdateExpenseRequest>): void {
+    // Garante que há pelo menos um campo para atualizar
+    const hasAnyField = (
+      data.description !== undefined ||
+      data.amount !== undefined ||
+      data.category !== undefined ||
+      data.expense_date !== undefined ||
+      data.notes !== undefined ||
+      data.paid_by !== undefined ||
+      data.receipt_url !== undefined
+    );
+    if (!hasAnyField) {
+      throw new ApiException('Nenhum campo para atualizar foi fornecido', 400);
+    }
+
+    if (data.description !== undefined && !data.description.trim()) {
+      throw new ApiException('Descrição não pode estar vazia', 400);
+    }
+
+    if (data.amount !== undefined) {
+      if (typeof data.amount !== 'number' || isNaN(data.amount) || data.amount <= 0) {
+        throw new ApiException('Valor deve ser um número maior que zero', 400);
+      }
+    }
+
+    if (data.category !== undefined && !data.category.trim()) {
+      throw new ApiException('Categoria não pode estar vazia', 400);
+    }
+
+    if (data.expense_date !== undefined) {
+      data.expense_date = this.convertDateToISO(data.expense_date);
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(data.expense_date)) {
+        throw new ApiException('Data deve estar no formato DD/MM/YYYY, DD/MM/YY ou YYYY-MM-DD', 400);
+      }
+      const dateObj = new Date(data.expense_date);
+      if (isNaN(dateObj.getTime())) {
+        throw new ApiException('Data inválida', 400);
+      }
     }
   }
 }

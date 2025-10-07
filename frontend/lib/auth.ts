@@ -51,7 +51,11 @@ class CookieManager {
     const expires = new Date()
     expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000))
     
-    document.cookie = `${name}=${value}; expires=${expires.toUTCString()}; path=/; secure; samesite=strict`
+    // Em desenvolvimento (HTTP), não usar flag 'secure'
+    const isSecure = window.location.protocol === 'https:'
+    const secureFlag = isSecure ? '; secure' : ''
+    
+    document.cookie = `${name}=${value}; expires=${expires.toUTCString()}; path=/${secureFlag}; samesite=strict`
   }
 
   static get(name: string): string | null {
@@ -269,18 +273,22 @@ export class AuthService {
     if (typeof window !== 'undefined') {
       // Remove token do cookie
       CookieManager.remove(TOKEN_STORAGE_KEY)
-      
+
       // Remove dados do localStorage
       localStorage.removeItem(AUTH_STORAGE_KEY)
-      
+
       // Limpa outros dados relacionados à autenticação
       localStorage.removeItem('futebol_user')
       localStorage.removeItem('futebol_preferences')
-      
-      // Força atualização da página para garantir limpeza completa do estado
-      setTimeout(() => {
+
+      // Redireciona diretamente para a landing page sem reload total
+      // Evita loops causados por componentes protegidos tentando verificar auth durante reload
+      try {
+        window.location.assign('/landing')
+      } catch {
+        // Fallback: recarrega se assign falhar
         window.location.reload()
-      }, 100)
+      }
     }
   }
 

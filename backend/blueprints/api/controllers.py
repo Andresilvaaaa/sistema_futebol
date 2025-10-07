@@ -1309,19 +1309,19 @@ def create_expense(period_id):
         if not period:
             return APIResponse.error('Período não encontrado', 404)
         
+        # Log dos dados recebidos para debug
+        current_app.logger.info(f"Dados recebidos para criação de despesa: {request.json}")
+        
         # Validar dados de entrada
         schema = ExpenseCreateSchema()
         try:
             data = schema.load(request.json)
         except MarshmallowValidationError as e:
+            current_app.logger.error(f"Erro de validação: {e.messages}")
             return APIResponse.error('Dados inválidos', e.messages, 400)
         
-        # Extrair mês e ano da data da despesa
-        expense_date_value = data['expense_date']
-        if isinstance(expense_date_value, datetime):
-            expense_date = expense_date_value.date()
-        else:
-            expense_date = datetime.strptime(expense_date_value, '%Y-%m-%d').date()
+        # Extrair mês e ano da data da despesa a partir da data validada pelo schema
+        expense_date = data['expense_date']  # Agora é um objeto date, não datetime
         
         # Criar nova despesa
         expense = Expense(
@@ -1376,27 +1376,29 @@ def update_expense(period_id, expense_id):
         if not expense:
             return APIResponse.error('Despesa não encontrada', 404)
         
-        # Validar dados de entrada
-        schema = ExpenseCreateSchema()
+        # Validar dados de entrada (update permite campos parciais)
+        schema = ExpenseUpdateSchema()
         try:
             data = schema.load(request.json)
         except MarshmallowValidationError as e:
             return APIResponse.error('Dados inválidos', e.messages, 400)
         
-        # Extrair mês e ano da data da despesa
-        expense_date_value = data['expense_date']
-        if isinstance(expense_date_value, datetime):
-            expense_date = expense_date_value.date()
-        else:
-            expense_date = datetime.strptime(expense_date_value, '%Y-%m-%d').date()
+        # Extrair mês e ano da data da despesa, se fornecida
+        expense_date = None
+        if 'expense_date' in data and data['expense_date'] is not None:
+            expense_date = data['expense_date'].date()
         
-        # Atualizar campos da despesa
-        expense.description = data['description']
-        expense.amount = Decimal(str(data['amount']))
-        expense.category = data['category']
-        expense.date = expense_date
-        expense.month = expense_date.month
-        expense.year = expense_date.year
+        # Atualizar campos da despesa (somente os presentes no payload)
+        if 'description' in data:
+            expense.description = data['description']
+        if 'amount' in data:
+            expense.amount = Decimal(str(data['amount']))
+        if 'category' in data:
+            expense.category = data['category']
+        if expense_date is not None:
+            expense.date = expense_date
+            expense.month = expense_date.month
+            expense.year = expense_date.year
         expense.updated_at = datetime.utcnow()
         
         db.session.commit()

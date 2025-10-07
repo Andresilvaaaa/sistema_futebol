@@ -96,6 +96,22 @@ class ApiClient {
       );
     }
 
+    // Se o token expirou ou não autorizado, força logout e redirecionamento
+    if (response.status === 401 || response.status === 403) {
+      try {
+        if (typeof window !== 'undefined') {
+          // Remove token e dados de auth para evitar loops
+          document.cookie = 'futebol_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+          localStorage.removeItem('futebol_auth');
+          // Redireciona para a landing page
+          // Usamos location.assign para evitar conflitos com roteamento em páginas protegidas
+          window.location.assign('/landing');
+        }
+      } catch (e) {
+        // silencia erros de logout
+      }
+    }
+
     if (!response.ok) {
       // Trata resposta de erro padronizada
       const errorMessage = responseData?.message || `Erro HTTP ${response.status}`;

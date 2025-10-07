@@ -188,10 +188,19 @@ export default function ExpensesPage() {
   const currentMonth = new Date().getMonth() + 1
   const currentYear = new Date().getFullYear()
 
-  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const totalExpenses = expenses.reduce((sum, expense) => {
+    const amount = typeof expense.amount === 'number' && !isNaN(expense.amount) ? expense.amount : 0
+    return sum + amount
+  }, 0)
+  
   const monthlyExpenses = expenses
     .filter((e) => e.month === currentMonth && e.year === currentYear)
-    .reduce((sum, expense) => sum + expense.amount, 0)
+    .reduce((sum, expense) => {
+      const amount = typeof expense.amount === 'number' && !isNaN(expense.amount) ? expense.amount : 0
+      return sum + amount
+    }, 0)
+
+  const averageMonthlyExpenses = expenses.length > 0 ? totalExpenses / 12 : 0
 
   if (loading) {
     return (
@@ -254,7 +263,7 @@ export default function ExpensesPage() {
               </div>
               <span className="text-sm text-muted-foreground">Média Mensal</span>
             </div>
-            <div className="text-2xl font-bold text-blue-600">R$ {(totalExpenses / 12).toLocaleString("pt-BR")}</div>
+            <div className="text-2xl font-bold text-blue-600">R$ {averageMonthlyExpenses.toLocaleString("pt-BR")}</div>
           </Card>
         </div>
 

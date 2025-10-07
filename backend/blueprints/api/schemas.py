@@ -58,8 +58,8 @@ class MonthlyPaymentCreateSchema(Schema):
     @validates('year')
     def validate_year(self, value):
         current_year = datetime.now().year
-        if value < 2020 or value > current_year + 1:
-            raise ValidationError(f'Ano deve estar entre 2020 e {current_year + 1}')
+        if value < 2020 or value > 2030:
+            raise ValidationError(f'Ano deve estar entre 2020 e 2030')
     
     @validates('month')
     def validate_month(self, value):
@@ -140,15 +140,16 @@ class ExpenseCreateSchema(Schema):
         'equipment', 'field_rental', 'referee', 'transportation', 
         'food', 'medical', 'maintenance', 'other'
     ]))
-    expense_date = fields.DateTime(required=True)
+    expense_date = fields.Date(required=True)  # Mudado de DateTime para Date
     paid_by = fields.Str(validate=validate.Length(max=100), allow_none=True)
     receipt_url = fields.Url(allow_none=True)
     notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
     
     @validates('expense_date')
     def validate_expense_date(self, value):
-        if value > datetime.now():
-            raise ValidationError('Data da despesa não pode ser no futuro')
+        # Removendo validação de data futura para permitir previsão de gastos
+        # Usuários podem criar despesas futuras para planejamento financeiro
+        pass
 
 
 class ExpenseUpdateSchema(Schema):
@@ -159,15 +160,16 @@ class ExpenseUpdateSchema(Schema):
         'equipment', 'field_rental', 'referee', 'transportation', 
         'food', 'medical', 'maintenance', 'other'
     ]))
-    expense_date = fields.DateTime()
+    expense_date = fields.Date()  # Mudado de DateTime para Date
     paid_by = fields.Str(validate=validate.Length(max=100), allow_none=True)
     receipt_url = fields.Url(allow_none=True)
     notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
     
     @validates('expense_date')
     def validate_expense_date(self, value):
-        if value and value > datetime.now():
-            raise ValidationError('Data da despesa não pode ser no futuro')
+        # Removendo validação de data futura para permitir previsão de gastos
+        # Usuários podem editar despesas futuras para planejamento financeiro
+        pass
 
 
 class ExpenseResponseSchema(Schema):

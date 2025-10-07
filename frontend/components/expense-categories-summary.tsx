@@ -6,9 +6,25 @@ interface ExpenseCategoriesSummaryProps {
 }
 
 export function ExpenseCategoriesSummary({ expenses }: ExpenseCategoriesSummaryProps) {
+  // Mapeamento de categorias do backend (inglês) para frontend (português)
+  const getCategoryLabel = (category: string | undefined | null) => {
+    const categoryMap = {
+      'equipment': 'Equipamentos',
+      'field_rental': 'Aluguel de Campo',
+      'referee': 'Arbitragem',
+      'transportation': 'Transporte',
+      'food': 'Alimentação',
+      'medical': 'Médico',
+      'maintenance': 'Manutenção',
+      'other': 'Outros'
+    }
+    return categoryMap[category as keyof typeof categoryMap] || category || 'Sem categoria'
+  }
+
   const categoryTotals = expenses.reduce(
     (acc, expense) => {
-      acc[expense.category] = (acc[expense.category] || 0) + expense.amount
+      const categoryLabel = getCategoryLabel(expense.category)
+      acc[categoryLabel] = (acc[categoryLabel] || 0) + expense.amount
       return acc
     },
     {} as Record<string, number>,
@@ -18,15 +34,14 @@ export function ExpenseCategoriesSummary({ expenses }: ExpenseCategoriesSummaryP
 
   const getCategoryColor = (category: string) => {
     const colors = {
-      Campo: "bg-blue-500",
-      Equipamentos: "bg-green-500",
-      Uniformes: "bg-purple-500",
-      Transporte: "bg-orange-500",
-      Alimentação: "bg-red-500",
-      Arbitragem: "bg-yellow-500",
-      Manutenção: "bg-gray-500",
-      Marketing: "bg-pink-500",
-      Outros: "bg-indigo-500",
+      'Equipamentos': "bg-green-500",
+      'Aluguel de Campo': "bg-blue-500",
+      'Arbitragem': "bg-yellow-500",
+      'Transporte': "bg-orange-500",
+      'Alimentação': "bg-red-500",
+      'Médico': "bg-purple-500",
+      'Manutenção': "bg-gray-500",
+      'Outros': "bg-indigo-500",
     }
     return colors[category as keyof typeof colors] || "bg-gray-500"
   }

@@ -22,7 +22,7 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
     description: "",
     amount: "",
     category: "",
-    date: new Date().toISOString().split("T")[0],
+    date: "", // Inicia vazio para permitir entrada manual
     notes: "",
   })
 
@@ -40,11 +40,23 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Validate required fields
+    if (!formData.description || !formData.amount || !formData.category) {
+      alert('Por favor, preencha todos os campos obrigatórios.')
+      return
+    }
+
     const expense: CreateExpenseRequest = {
-      description: formData.description,
-      amount: Number.parseFloat(formData.amount),
+      description: formData.description.trim(),
+      amount: Number.parseFloat(formData.amount.replace(',', '.')),
       category: formData.category,
-      expense_date: formData.date,
+      expense_date: formData.date, // Passa a data como string, o serviço fará a conversão
+    }
+
+    // Checagem adicional para evitar NaN ou valores inválidos
+    if (isNaN(expense.amount) || expense.amount <= 0) {
+      alert('Informe um valor válido maior que zero.')
+      return
     }
 
     onAddExpense(expense)
@@ -52,7 +64,7 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
       description: "",
       amount: "",
       category: "",
-      date: new Date().toISOString().split("T")[0],
+      date: "", // Reseta para vazio
       notes: "",
     })
     setOpen(false)
@@ -100,7 +112,6 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
             <Select
               value={formData.category}
               onValueChange={(value) => setFormData({ ...formData, category: value })}
-              required
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione a categoria" />
@@ -119,11 +130,15 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
             <Label htmlFor="date">Data</Label>
             <Input
               id="date"
-              type="date"
+              type="text"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              placeholder="DD/MM/YYYY ou DD/MM/YY"
               required
             />
+            <p className="text-xs text-muted-foreground">
+              Formatos aceitos: DD/MM/YYYY, DD/MM/YY ou use o seletor de data
+            </p>
           </div>
 
           <div className="space-y-2">

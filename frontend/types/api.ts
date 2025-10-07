@@ -85,7 +85,7 @@ export interface CasualPlayer extends BaseEntity {
 export interface Expense extends BaseEntity {
   description: string;
   amount: number;
-  date: string;
+  expense_date: string;
   category?: string | null;
 }
 

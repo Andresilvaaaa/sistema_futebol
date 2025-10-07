@@ -19,16 +19,16 @@ interface EditExpenseDialogProps {
   onEditExpense: (expenseId: string, updatedExpense: UpdateExpenseRequest) => void
 }
 
+// Categorias alinhadas com o backend (valores em inglês, labels em português)
 const categories = [
-  "Campo",
-  "Equipamentos",
-  "Uniformes",
-  "Transporte",
-  "Alimentação",
-  "Arbitragem",
-  "Manutenção",
-  "Marketing",
-  "Outros",
+  { label: "Equipamentos", value: "equipment" },
+  { label: "Aluguel de Campo", value: "field_rental" },
+  { label: "Arbitragem", value: "referee" },
+  { label: "Transporte", value: "transportation" },
+  { label: "Alimentação", value: "food" },
+  { label: "Médico", value: "medical" },
+  { label: "Manutenção", value: "maintenance" },
+  { label: "Outros", value: "other" },
 ]
 
 export function EditExpenseDialog({ open, onOpenChange, expense, onEditExpense }: EditExpenseDialogProps) {
@@ -126,8 +126,8 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onEditExpense }
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -137,7 +137,17 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onEditExpense }
 
           <div className="space-y-2">
             <Label htmlFor="date">Data</Label>
-            <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <Input 
+              id="date" 
+              type="text" 
+              value={date} 
+              onChange={(e) => setDate(e.target.value)} 
+              placeholder="DD/MM/YYYY ou DD/MM/YY"
+              required 
+            />
+            <p className="text-xs text-muted-foreground">
+              Formatos aceitos: DD/MM/YYYY, DD/MM/YY ou YYYY-MM-DD
+            </p>
           </div>
 
           <div className="flex justify-end gap-2">

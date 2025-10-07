@@ -24,30 +24,47 @@ export function ExpensesTable({ expenses, onDeleteExpense, onEditExpense }: Expe
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
 
+  // Mapeamento de categorias do backend (inglês) para frontend (português)
+  const getCategoryLabel = (category: string | undefined | null) => {
+    const categoryMap = {
+      'equipment': 'Equipamentos',
+      'field_rental': 'Aluguel de Campo',
+      'referee': 'Arbitragem',
+      'transportation': 'Transporte',
+      'food': 'Alimentação',
+      'medical': 'Médico',
+      'maintenance': 'Manutenção',
+      'other': 'Outros'
+    }
+    return categoryMap[category as keyof typeof categoryMap] || category || 'Sem categoria'
+  }
+
   const filteredExpenses = expenses.filter((expense) => {
-    const matchesSearch =
-      expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.category.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = categoryFilter === "all" || expense.category === categoryFilter
+    const desc = (expense.description ?? "").toString().toLowerCase()
+    const cat = (expense.category ?? "").toString().toLowerCase()
+    const search = (searchTerm ?? "").toString().toLowerCase()
+
+    const matchesSearch = desc.includes(search) || cat.includes(search)
+    const matchesCategory = categoryFilter === "all" || (expense.category ?? "") === categoryFilter
 
     return matchesSearch && matchesCategory
   })
 
-  const categories = Array.from(new Set(expenses.map((e) => e.category)))
+  const categories = Array.from(new Set(expenses.map((e) => e.category).filter(Boolean))) as string[]
 
-  const getCategoryColor = (category: string) => {
+  const getCategoryColor = (category: string | undefined | null) => {
     const colors = {
-      Campo: "bg-blue-100 text-blue-800",
-      Equipamentos: "bg-green-100 text-green-800",
-      Uniformes: "bg-purple-100 text-purple-800",
-      Transporte: "bg-orange-100 text-orange-800",
-      Alimentação: "bg-red-100 text-red-800",
-      Arbitragem: "bg-yellow-100 text-yellow-800",
-      Manutenção: "bg-gray-100 text-gray-800",
-      Marketing: "bg-pink-100 text-pink-800",
-      Outros: "bg-indigo-100 text-indigo-800",
+      'Equipamentos': "bg-green-100 text-green-800",
+      'Aluguel de Campo': "bg-blue-100 text-blue-800",
+      'Arbitragem': "bg-yellow-100 text-yellow-800",
+      'Transporte': "bg-orange-100 text-orange-800",
+      'Alimentação': "bg-red-100 text-red-800",
+      'Médico': "bg-purple-100 text-purple-800",
+      'Manutenção': "bg-gray-100 text-gray-800",
+      'Outros': "bg-indigo-100 text-indigo-800",
     }
-    return colors[category as keyof typeof colors] || "bg-gray-100 text-gray-800"
+    const categoryLabel = getCategoryLabel(category)
+    return colors[categoryLabel as keyof typeof colors] || "bg-gray-100 text-gray-800"
   }
 
   const handleEditExpense = (expense: Expense) => {
@@ -75,8 +92,8 @@ export function ExpensesTable({ expenses, onDeleteExpense, onEditExpense }: Expe
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as categorias</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
+                {categories.map((category, index) => (
+                  <SelectItem key={`${category}-${index}`} value={category}>
                     {category}
                   </SelectItem>
                 ))}
@@ -103,12 +120,12 @@ export function ExpensesTable({ expenses, onDeleteExpense, onEditExpense }: Expe
                     <span className="font-medium">{expense.description}</span>
                   </td>
                   <td className="p-4">
-                    <Badge className={getCategoryColor(expense.category)}>{expense.category}</Badge>
+                    <Badge className={getCategoryColor(expense.category)}>{getCategoryLabel(expense.category)}</Badge>
                   </td>
                   <td className="p-4">
-                    <span className="font-bold text-red-600">R$ {expense.amount.toLocaleString("pt-BR")}</span>
+                    <span className="font-bold text-red-600">R$ {(expense.amount ?? 0).toLocaleString("pt-BR")}</span>
                   </td>
-                  <td className="p-4 text-muted-foreground">{new Date(expense.date).toLocaleDateString("pt-BR")}</td>
+                  <td className="p-4 text-muted-foreground">{expense.expense_date ? new Date(expense.expense_date).toLocaleDateString("pt-BR") : "-"}</td>
                   <td className="p-4">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
