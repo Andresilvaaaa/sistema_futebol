@@ -10,11 +10,13 @@ import { StatsCards } from "@/components/stats-cards"
 import { AddPlayerDialog } from "@/components/add-player-dialog"
 import { EditPlayerDialog } from "@/components/edit-player-dialog"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Search, Download, Grid, List, Users, UserX, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import AuthGuard from "@/components/auth-guard"
+import PlayersDetailsDrawer from "@/components/players-details-drawer"
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([])
@@ -25,6 +27,8 @@ export default function PlayersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<string>("all")
   
   const { toast } = useToast()
 
@@ -230,11 +234,15 @@ export default function PlayersPage() {
   const inactivePlayers = players.filter((p) => !p.isActive)
 
   const getFilteredPlayers = (playersList: Player[]) => {
-    return playersList.filter(
-      (player) =>
+    return playersList
+      .filter((player) =>
         player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         player.position.toLowerCase().includes(searchTerm.toLowerCase()),
-    )
+      )
+      .filter((player) => {
+        if (statusFilter === "all") return true
+        return player.status === statusFilter
+      })
   }
 
   const filteredActivePlayers = getFilteredPlayers(activePlayers)
@@ -318,7 +326,7 @@ export default function PlayersPage() {
           </div>
         </div>
 
-        <StatsCards stats={stats} />
+        <StatsCards stats={stats} onOpenDetails={() => setDetailsOpen(true)} />
 
         <div className="flex items-center justify-between mb-6">
           <div className="relative flex-1 max-w-md">
@@ -329,6 +337,20 @@ export default function PlayersPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
+          </div>
+          <div className="w-48">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger size="sm" aria-label="Filtrar por status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="active">Ativo</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="delayed">Atrasado</SelectItem>
+                <SelectItem value="inactive">Inativo</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center gap-2">
             <Button variant={viewMode === "grid" ? "default" : "outline"} size="sm" onClick={() => setViewMode("grid")}>
@@ -379,6 +401,18 @@ export default function PlayersPage() {
           loading={editingPlayer ? actionLoading === `edit-${editingPlayer.id}` : false}
         />
       </div>
+      <PlayersDetailsDrawer
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        stats={{
+          total: stats.total,
+          active: stats.active,
+          pending: stats.pending,
+          delayed: stats.delayed,
+          inactive: stats.inactive,
+        }}
+        players={players.map((p) => ({ id: p.id, name: p.name, status: p.status as any, monthlyFee: p.monthlyFee }))}
+      />
     </div>
     </AuthGuard>
   )

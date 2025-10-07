@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import type { MonthlyPeriod, MonthlyPlayer, CasualPlayer } from "@/types/monthly"
-import { getCurrentMonth, formatMonthYear } from "@/lib/monthly-utils"
+import { getCurrentMonth, formatMonthYear, computeMonthlyStats } from "@/lib/monthly-utils"
 import { MonthNavigation } from "@/components/month-navigation"
 import { ImportPlayersDialog } from "@/components/import-players-dialog"
 import { AddCasualPlayerDialog } from "@/components/add-casual-player-dialog"
@@ -25,6 +25,10 @@ export default function MonthlyPage() {
   const [monthlyPeriods, setMonthlyPeriods] = useState<MonthlyPeriod[]>([])
   const [monthlyPlayers, setMonthlyPlayers] = useState<MonthlyPlayer[]>([])
   const [casualPlayers, setCasualPlayers] = useState<CasualPlayer[]>([])
+  const [updatingMonthlyId, setUpdatingMonthlyId] = useState<string | null>(null)
+  const [updatingCasualId, setUpdatingCasualId] = useState<string | null>(null)
+  const [pulseMonthlyStats, setPulseMonthlyStats] = useState(false)
+  const [pulseCasualStats, setPulseCasualStats] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [casualPlayerDialogOpen, setCasualPlayerDialogOpen] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
@@ -225,35 +229,66 @@ export default function MonthlyPage() {
     }
   }
 
-  const handleStatusChange = async (playerId: string, newStatus: "paid" | "pending") => {
-    try {
-      const player = monthlyPlayers.find(p => p.id === playerId)
-      if (!player) {
-        toast({
-          title: "Erro",
-          description: "Jogador não encontrado.",
-          variant: "destructive",
-        })
-        return
-      }
+  const handleStatusChange = async (playerRecordId: string, newStatus: "paid" | "pending") => {
+    const player = monthlyPlayers.find(p => p.id === playerRecordId)
+    if (!player) {
+      toast({
+        title: "Erro",
+        description: "Jogador não encontrado.",
+        variant: "destructive",
+      })
+      return
+    }
 
-      // Atualizar status via API
-      await paymentsService.updateMonthlyPlayerPayment(player.monthlyPeriodId, player.playerId, newStatus)
+    // Guardar estado anterior para rollback
+    const prevPlayers = [...monthlyPlayers]
+
+    // Otimista: aplicar localmente e pulsar estatísticas
+    setUpdatingMonthlyId(playerRecordId)
+    setPulseMonthlyStats(true)
+    setMonthlyPlayers(players =>
+      players.map(p =>
+        p.id === playerRecordId
+          ? { ...p, status: newStatus, paymentDate: newStatus === "paid" ? new Date().toISOString() : undefined }
+          : p
+      )
+    )
+
+    try {
+      const resp = await paymentsService.updateMonthlyPlayerPayment(player.monthlyPeriodId, player.playerId, newStatus)
+
+      // Reconciliar com dados da API (caso traga payment_date ou outros campos)
+      if (resp?.data) {
+        setMonthlyPlayers(players =>
+          players.map(p =>
+            p.id === playerRecordId
+              ? {
+                  ...p,
+                  status: resp.data.status === "paid" ? "paid" : "pending",
+                  paymentDate: resp.data.payment_date ?? p.paymentDate,
+                  monthlyFee: (resp.data as any).effective_monthly_fee ?? p.monthlyFee,
+                }
+              : p
+          )
+        )
+      }
 
       toast({
         title: "Status atualizado",
         description: `Pagamento marcado como ${newStatus === "paid" ? "pago" : "pendente"}`,
       })
-
-      // Recarregar dados
-      await loadMonthlyData()
     } catch (error) {
       console.error('Erro ao atualizar status:', error)
+      // Rollback em caso de erro
+      setMonthlyPlayers(prevPlayers)
       toast({
         title: "Erro",
         description: "Não foi possível atualizar o status de pagamento.",
         variant: "destructive",
       })
+    } finally {
+      setUpdatingMonthlyId(null)
+      setTimeout(() => setPulseMonthlyStats(false), 600)
     }
   }
 
@@ -414,23 +449,56 @@ export default function MonthlyPage() {
       return
     }
 
+    // Estado anterior para possível rollback
+    const prevCasualPlayers = [...casualPlayers]
+
+    // Otimismo: atualizar localmente imediatamente
+    setUpdatingCasualId(casualPlayerId)
+    setPulseCasualStats(true)
+    setCasualPlayers((players) =>
+      players.map((p) =>
+        p.id === casualPlayerId && p.monthlyPeriodId === currentPeriod.id
+          ? { ...p, status, paymentDate: status === "paid" ? new Date().toISOString() : undefined }
+          : p
+      )
+    )
+
     try {
-      await paymentsService.updateCasualPlayerPayment(currentPeriod.id, casualPlayerId, status)
+      const response = await paymentsService.updateCasualPlayerPayment(currentPeriod.id, casualPlayerId, status)
+
+      // Ajustar com dados da API (paymentDate, etc.)
+      if (response?.data) {
+        setCasualPlayers((players) =>
+          players.map((p) =>
+            p.id === casualPlayerId
+              ? {
+                  ...p,
+                  status: response.data.status === "paid" ? "paid" : "pending",
+                  paymentDate: response.data.payment_date,
+                  amount: response.data.amount,
+                }
+              : p
+          )
+        )
+      }
 
       toast({
         title: "Status atualizado",
         description: `Pagamento do avulso marcado como ${status === "paid" ? "pago" : "pendente"}`,
       })
-
-      // Recarregar dados para refletir estatísticas e listas
-      await loadMonthlyData()
     } catch (error) {
       console.error("Erro ao atualizar status do jogador avulso:", error)
+      // Rollback em caso de erro
+      setCasualPlayers(prevCasualPlayers)
       toast({
         title: "Erro",
         description: "Não foi possível atualizar o status do jogador avulso",
         variant: "destructive",
       })
+    } finally {
+      setUpdatingCasualId(null)
+      // Remover pulso após breve período
+      setTimeout(() => setPulseCasualStats(false), 600)
     }
   }
 
@@ -495,21 +563,7 @@ export default function MonthlyPage() {
     }
   }
 
-  const stats = {
-    received:
-      currentPeriodPlayers.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.monthlyFee, 0) +
-      currentPeriodCasualPlayers.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0),
-    expected:
-      currentPeriodPlayers.reduce((sum, p) => sum + p.monthlyFee, 0) +
-      currentPeriodCasualPlayers.reduce((sum, p) => sum + p.amount, 0),
-    pending:
-      currentPeriodPlayers.filter((p) => p.status === "pending").length +
-      currentPeriodCasualPlayers.filter((p) => p.status === "pending").length,
-    paid:
-      currentPeriodPlayers.filter((p) => p.status === "paid").length +
-      currentPeriodCasualPlayers.filter((p) => p.status === "paid").length,
-    casualCount: currentPeriodCasualPlayers.length,
-  }
+  const stats = computeMonthlyStats(currentPeriodPlayers, currentPeriodCasualPlayers)
 
   const currentFee = currentPeriodPlayers.length > 0 ? currentPeriodPlayers[0].monthlyFee : 150
 
@@ -526,7 +580,9 @@ export default function MonthlyPage() {
                   <DollarSign className="h-4 w-4 text-green-500" />
                   <span className="text-sm text-muted-foreground">Recebido</span>
                 </div>
-                <div className="text-2xl font-bold text-green-600">R$ {stats.received.toFixed(2)}</div>
+                <div className="text-2xl font-bold text-green-600">
+                  R$ <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{stats.received.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
               </Card>
 
               <Card className="p-3">
@@ -534,7 +590,7 @@ export default function MonthlyPage() {
                   <TrendingUp className="h-4 w-4 text-blue-500" />
                   <span className="text-sm text-muted-foreground">Esperado</span>
                 </div>
-                <div className="text-2xl font-bold text-blue-600">R$ {stats.expected.toFixed(2)}</div>
+                <div className="text-2xl font-bold text-blue-600">R$ {stats.expected.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </Card>
 
               <Card className="p-3">
@@ -542,7 +598,9 @@ export default function MonthlyPage() {
                   <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                   <span className="text-sm text-muted-foreground">Pendentes</span>
                 </div>
-                <div className="text-2xl font-bold">{stats.pending}</div>
+                <div className="text-2xl font-bold">
+                  <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{stats.pending}</span>
+                </div>
               </Card>
 
               <Card className="p-3">
@@ -550,7 +608,9 @@ export default function MonthlyPage() {
                   <Users className="h-4 w-4 text-emerald-500" />
                   <span className="text-sm text-muted-foreground">Pagaram</span>
                 </div>
-                <div className="text-2xl font-bold text-emerald-600">{stats.paid}</div>
+                <div className="text-2xl font-bold text-emerald-600">
+                  <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{stats.paid}</span>
+                </div>
               </Card>
 
               <Card className="p-3">
@@ -624,6 +684,7 @@ export default function MonthlyPage() {
                               pendingMonthsCount={
                                 player.status === "pending" ? calculatePendingMonths(player.playerId) : undefined
                               }
+                              updating={updatingMonthlyId === player.id}
                             />
                           </td>
                           <td className="p-4 font-medium">R$ {player.monthlyFee}</td>
@@ -636,6 +697,8 @@ export default function MonthlyPage() {
                               onSendNotification={() => handleSendNotification(player.playerName)}
                               onViewHistory={() => handleViewHistory(player.playerName)}
                               onRemoveFromMonth={() => handleRemoveFromMonth(player.id, player.playerName)}
+                              disabled={updatingMonthlyId === player.id}
+                              loading={updatingMonthlyId === player.id}
                             />
                           </td>
                         </tr>
@@ -691,16 +754,20 @@ export default function MonthlyPage() {
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">
                       R${" "}
+                      <span className={pulseCasualStats ? "animate-pulse" : ""}>
                       {currentPeriodCasualPlayers
                         .filter((p) => p.status === "paid")
                         .reduce((sum, p) => sum + p.amount, 0)
                         .toFixed(2)}
+                      </span>
                     </div>
                     <div className="text-sm text-muted-foreground">Arrecadado</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-orange-600">
-                      {currentPeriodCasualPlayers.filter((p) => p.status === "pending").length}
+                      <span className={pulseCasualStats ? "animate-pulse" : ""}>
+                        {currentPeriodCasualPlayers.filter((p) => p.status === "pending").length}
+                      </span>
                     </div>
                     <div className="text-sm text-muted-foreground">Pendentes</div>
                   </div>
@@ -737,6 +804,7 @@ export default function MonthlyPage() {
           monthName={formatMonthYear(currentMonth, currentYear)}
           onRemoveCasualPlayer={handleRemoveCasualPlayer}
           onUpdateCasualPlayerStatus={handleUpdateCasualPlayerStatus}
+          updatingCasualId={updatingCasualId || undefined}
         />
 
         <MonthlyFeeAdjustmentDialog

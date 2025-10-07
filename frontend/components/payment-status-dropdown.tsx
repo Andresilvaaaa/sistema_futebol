@@ -1,14 +1,15 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
-import { Check, Clock } from "lucide-react"
+import { Check, Clock, Loader2 } from "lucide-react"
 
 interface PaymentStatusDropdownProps {
   currentStatus: "paid" | "pending"
   pendingMonthsCount?: number
+  updating?: boolean
 }
 
-export function PaymentStatusDropdown({ currentStatus, pendingMonthsCount }: PaymentStatusDropdownProps) {
+export function PaymentStatusDropdown({ currentStatus, pendingMonthsCount, updating }: PaymentStatusDropdownProps) {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "paid":
@@ -39,9 +40,13 @@ export function PaymentStatusDropdown({ currentStatus, pendingMonthsCount }: Pay
   const CurrentIcon = currentConfig.icon
 
   return (
-    <Badge className={currentConfig.className}>
-      <CurrentIcon className="h-3 w-3 mr-1" />
-      {currentConfig.label}
+    <Badge className={`${currentConfig.className} ${updating ? "opacity-70" : ""}`}>
+      {updating ? (
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+      ) : (
+        <CurrentIcon className="h-3 w-3 mr-1" />
+      )}
+      {updating ? "Atualizando..." : currentConfig.label}
     </Badge>
   )
 }

@@ -39,3 +39,43 @@ export const getAdjacentMonths = (month: number, year: number) => {
     next: { month: nextMonth, year: nextYear },
   }
 }
+import type { MonthlyPlayer, CasualPlayer } from "@/types/monthly"
+
+export interface MonthlyStats {
+  received: number
+  expected: number
+  pending: number
+  paid: number
+  casualCount: number
+}
+
+export const computeMonthlyStats = (
+  players: MonthlyPlayer[],
+  casuals: CasualPlayer[]
+): MonthlyStats => {
+  const toNum = (v: unknown): number => {
+    if (typeof v === "number") return v
+    const n = Number(v ?? 0)
+    return isNaN(n) ? 0 : n
+  }
+
+  const received =
+    players.filter((p) => p.status === "paid").reduce((sum, p) => sum + toNum(p.monthlyFee), 0) +
+    casuals.filter((c) => c.status === "paid").reduce((sum, c) => sum + toNum(c.amount), 0)
+
+  const expected =
+    players.reduce((sum, p) => sum + toNum(p.monthlyFee), 0) +
+    casuals.reduce((sum, c) => sum + toNum(c.amount), 0)
+
+  const pending =
+    players.filter((p) => p.status === "pending").length +
+    casuals.filter((c) => c.status === "pending").length
+
+  const paid =
+    players.filter((p) => p.status === "paid").length +
+    casuals.filter((c) => c.status === "paid").length
+
+  const casualCount = casuals.length
+
+  return { received, expected, pending, paid, casualCount }
+}

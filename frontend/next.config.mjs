@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 const nextConfig = {
-  outputFileTracingRoot: process.cwd(),
+  // Define explicitamente a raiz de tracing para evitar aviso de múltiplos lockfiles
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   eslint: {
     ignoreDuringBuilds: true,
   },

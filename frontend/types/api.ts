@@ -269,7 +269,7 @@ export type ApiEndpoints = {
   // Stats
   stats: () => string;
   playerStats: () => string;
-  paymentStats: (periodId: string) => string;
+  paymentStats: (year: number, month: number) => string;
 };
 
 // Constante com os endpoints
@@ -302,5 +302,5 @@ export const API_ENDPOINTS: ApiEndpoints = {
   // Stats
   stats: () => '/api/stats',
   playerStats: () => '/api/stats/players',
-  paymentStats: (periodId: string) => `/api/stats/payments/${periodId}`,
+  paymentStats: (year: number, month: number) => `/api/stats/payments/${year}/${month}`,
 };

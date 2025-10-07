@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Calendar, User, DollarSign, UserCheck, MoreHorizontal, Trash2, Check, Clock } from "lucide-react"
+import { Calendar, User, DollarSign, UserCheck, MoreHorizontal, Trash2, Check, Clock, Loader2 } from "lucide-react"
 import type { CasualPlayer } from "@/types/monthly"
 
 interface CasualPlayersHistoryDialogProps {
@@ -15,6 +15,7 @@ interface CasualPlayersHistoryDialogProps {
   monthName: string
   onRemoveCasualPlayer?: (casualPlayerId: string) => void
   onUpdateCasualPlayerStatus?: (casualPlayerId: string, status: "paid" | "pending") => void
+  updatingCasualId?: string
 }
 
 export function CasualPlayersHistoryDialog({
@@ -24,6 +25,7 @@ export function CasualPlayersHistoryDialog({
   monthName,
   onRemoveCasualPlayer,
   onUpdateCasualPlayerStatus,
+  updatingCasualId,
 }: CasualPlayersHistoryDialogProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR")
@@ -110,13 +112,18 @@ export function CasualPlayersHistoryDialog({
 
                     <div className="flex items-center gap-2">
                       <div className="text-right">
-                        <div className="text-lg font-bold">{formatCurrency(player.amount)}</div>
+                        <div className="text-lg font-bold flex items-center gap-2">
+                          {formatCurrency(player.amount)}
+                          {updatingCasualId === player.id && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
                       </div>
                       
                       {(onRemoveCasualPlayer || onUpdateCasualPlayerStatus) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" disabled={updatingCasualId === player.id}>
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -126,6 +133,7 @@ export function CasualPlayersHistoryDialog({
                                 {player.status !== "paid" && (
                                   <DropdownMenuItem 
                                     onClick={() => onUpdateCasualPlayerStatus(player.id, "paid")}
+                                    disabled={updatingCasualId === player.id}
                                     className="cursor-pointer"
                                   >
                                     <Check className="h-4 w-4 mr-2 text-green-600" />
@@ -135,6 +143,7 @@ export function CasualPlayersHistoryDialog({
                                 {player.status !== "pending" && (
                                   <DropdownMenuItem 
                                     onClick={() => onUpdateCasualPlayerStatus(player.id, "pending")}
+                                    disabled={updatingCasualId === player.id}
                                     className="cursor-pointer"
                                   >
                                     <Clock className="h-4 w-4 mr-2 text-orange-600" />
@@ -146,6 +155,7 @@ export function CasualPlayersHistoryDialog({
                             {onRemoveCasualPlayer && (
                               <DropdownMenuItem 
                                 onClick={() => onRemoveCasualPlayer(player.id)}
+                                disabled={updatingCasualId === player.id}
                                 className="cursor-pointer text-red-600"
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
