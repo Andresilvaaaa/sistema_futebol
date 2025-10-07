@@ -114,6 +114,12 @@ export interface CreateMonthlyPeriodRequest {
   month: number;
 }
 
+// Atualização de período mensal (mensalidade padrão e/ou status)
+export interface UpdateMonthlyPeriodRequest {
+  monthly_fee?: number;
+  status?: 'active' | 'closed';
+}
+
 export interface UpdatePaymentStatusRequest {
   status: PaymentStatus; // Renomeado de payment_status
 }
@@ -137,7 +143,7 @@ export interface UpdateCustomMonthlyFeeRequest {
 export interface CreateExpenseRequest {
   description: string;
   amount: number;
-  date: string;
+  expense_date: string;
   category?: string;
 }
 

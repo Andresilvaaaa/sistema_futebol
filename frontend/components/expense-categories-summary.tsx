@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card"
-import type { Expense } from "@/types/cashflow"
+import type { Expense } from "@/types/api"
 
 interface ExpenseCategoriesSummaryProps {
   expenses: Expense[]

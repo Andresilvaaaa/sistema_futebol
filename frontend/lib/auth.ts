@@ -185,22 +185,31 @@ export class AuthService {
        });
 
       if (!response.ok) {
-        return { success: false, error: 'Falha na autenticação' };
+        const errorData = await response.json().catch(() => ({}));
+        return { success: false, error: errorData.error || 'Falha na autenticação' };
       }
 
       const data = await response.json();
+      
+      // Create user object with proper structure
+      const user: User = {
+        id: data.user.username, // Use username as ID for now
+        name: data.user.username,
+        email: `${data.user.username}@futebol.com`,
+        role: data.user.username === 'admin' ? 'admin' : 'user'
+      };
       
       // Armazena token em cookie seguro
       CookieManager.set(TOKEN_STORAGE_KEY, data.access_token, 7)
       
       // Mantém dados no localStorage para compatibilidade
       const authData = {
-        user: data.user,
+        user: user,
         expiresAt: Date.now() + (24 * 60 * 60 * 1000)
       }
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
       
-      return { success: true, user: data.user };
+      return { success: true, user: user };
     } catch (error) {
       console.error('Erro no login:', error);
       return { success: false, error: 'Erro de conexão' };

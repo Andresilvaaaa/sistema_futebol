@@ -64,6 +64,9 @@ class DevelopmentConfig(BaseConfig):
     DEBUG = True
     TESTING = False
 
+    # JWT: definir chave padrão em desenvolvimento para evitar falhas de login
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret')
+
     # Database - SQLite para desenvolvimento (caminho absoluto)
     # Usar o arquivo dentro de backend/instance para coincidir com dados existentes
     # Construir caminho absoluto para evitar erros "unable to open database file"

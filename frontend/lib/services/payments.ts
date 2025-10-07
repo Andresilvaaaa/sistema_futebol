@@ -17,7 +17,7 @@ import {
 } from '../../types/api';
 
 export class PaymentsService {
-  private readonly baseEndpoint = '/api/monthly-payments';
+  private readonly baseEndpoint = '/api/monthly-periods';
 
   // === PERÍODOS MENSAIS ===
 
@@ -26,14 +26,29 @@ export class PaymentsService {
    */
   async getMonthlyPeriods(filters?: { year?: number; month?: number }): Promise<PaginatedApiResponse<MonthlyPeriod>> {
     try {
-      const response = await api.get<PaginatedApiResponse<MonthlyPeriod>>(
+      const response = await api.get<any>(
         this.baseEndpoint,
         filters
       );
-      
-      this.validatePaginatedResponse(response);
-      
-      return response;
+
+      // Backend retorna um array simples; adaptamos para o formato paginado esperado
+      if (Array.isArray(response)) {
+        return {
+          success: true,
+          data: response,
+          pagination: {
+            page: 1,
+            pages: 1,
+            per_page: response.length,
+            total: response.length,
+            has_next: false,
+            has_prev: false,
+          },
+        } as PaginatedApiResponse<MonthlyPeriod>;
+      }
+
+      this.validatePaginatedResponse(response as PaginatedApiResponse<MonthlyPeriod>);
+      return response as PaginatedApiResponse<MonthlyPeriod>;
     } catch (error) {
       throw this.handleServiceError('Erro ao buscar períodos mensais', error);
     }
@@ -66,15 +81,31 @@ export class PaymentsService {
   async createMonthlyPeriod(periodData: CreateMonthlyPeriodRequest): Promise<StandardApiResponse<MonthlyPeriod>> {
     this.validateCreatePeriodData(periodData);
 
+    // Garantir que apenas os campos esperados sejam enviados (year e month)
+    const payload = {
+      year: periodData.year,
+      month: periodData.month,
+    };
+
     try {
-      const response = await api.post<StandardApiResponse<MonthlyPeriod>>(
-        this.baseEndpoint,
-        periodData
+      // Criação de período ocorre em /monthly-payments no backend
+      const response = await api.post<any>(
+        '/api/monthly-payments',
+        payload
       );
-      
-      this.validateStandardResponse(response);
-      
-      return response;
+
+      // Backend pode retornar resposta padronizada ou objeto; normalizar
+      if (response && typeof response === 'object' && 'success' in response) {
+        this.validateStandardResponse(response as StandardApiResponse<MonthlyPeriod>);
+        return response as StandardApiResponse<MonthlyPeriod>;
+      }
+
+      // Caso retorne o objeto do período diretamente
+      return {
+        success: true,
+        data: response as MonthlyPeriod,
+        message: 'Período criado com sucesso',
+      } as StandardApiResponse<MonthlyPeriod>;
     } catch (error) {
       throw this.handleServiceError('Erro ao criar período mensal', error);
     }
@@ -136,14 +167,29 @@ export class PaymentsService {
     }
 
     try {
-      const response = await api.get<PaginatedApiResponse<MonthlyPlayer>>(
-        `${this.baseEndpoint}/${periodId}/players`,
+      const response = await api.get<any>(
+        `/api/monthly-periods/${periodId}/players`,
         filters
       );
-      
-      this.validatePaginatedResponse(response);
-      
-      return response;
+
+      // Backend retorna array simples; adaptar para paginado
+      if (Array.isArray(response)) {
+        return {
+          success: true,
+          data: response,
+          pagination: {
+            page: 1,
+            pages: 1,
+            per_page: response.length,
+            total: response.length,
+            has_next: false,
+            has_prev: false,
+          },
+        } as PaginatedApiResponse<MonthlyPlayer>;
+      }
+
+      this.validatePaginatedResponse(response as PaginatedApiResponse<MonthlyPlayer>);
+      return response as PaginatedApiResponse<MonthlyPlayer>;
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar jogadores do período ${periodId}`, error);
     }
@@ -161,7 +207,7 @@ export class PaymentsService {
 
     try {
       const response = await api.post<StandardApiResponse<MonthlyPlayer[]>>(
-        `${this.baseEndpoint}/${periodId}/players`,
+        `/api/monthly-periods/${periodId}/players`,
         playersData
       );
       
@@ -189,7 +235,7 @@ export class PaymentsService {
 
     try {
       const response = await api.patch<StandardApiResponse<MonthlyPlayer>>(
-        `${this.baseEndpoint}/${periodId}/players/${playerId}/payment`,
+        `/api/monthly-periods/${periodId}/players/${playerId}/payment`,
         { status }
       );
       
@@ -231,7 +277,7 @@ export class PaymentsService {
   /**
    * Remove um jogador de um período mensal
    */
-  async removePlayerFromMonthlyPeriod(periodId: string, playerId: string): Promise<StandardApiResponse<null>> {
+  async removePlayerFromMonthlyPeriod(periodId: string, playerId: string): Promise<StandardApiResponse<void>> {
     if (!periodId?.trim()) {
       throw new ApiException('ID do período é obrigatório', 400);
     }
@@ -240,8 +286,8 @@ export class PaymentsService {
     }
 
     try {
-      const response = await api.delete<StandardApiResponse<null>>(
-        `${this.baseEndpoint}/${periodId}/players/${playerId}`
+      const response = await api.delete<StandardApiResponse<void>>(
+        `/api/monthly-periods/${periodId}/players/${playerId}`
       );
       
       this.validateStandardResponse(response);
@@ -263,13 +309,20 @@ export class PaymentsService {
     }
 
     try {
-      const response = await api.get<StandardApiResponse<CasualPlayer[]>>(
+      const response = await api.get<any>(
         `${this.baseEndpoint}/${periodId}/casual-players`
       );
-      
-      this.validateStandardResponse(response);
-      
-      return response;
+
+      // Backend retorna array direto; normalizar
+      if (Array.isArray(response)) {
+        return {
+          success: true,
+          data: response,
+        } as StandardApiResponse<CasualPlayer[]>;
+      }
+
+      this.validateStandardResponse(response as StandardApiResponse<CasualPlayer[]>);
+      return response as StandardApiResponse<CasualPlayer[]>;
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar jogadores avulsos do período ${periodId}`, error);
     }
@@ -331,17 +384,15 @@ export class PaymentsService {
   private validateCreatePeriodData(data: CreateMonthlyPeriodRequest): void {
     const errors: string[] = [];
 
-    if (!data.year || data.year < 2020 || data.year > 2030) {
-      errors.push('Ano deve estar entre 2020 e 2030');
+    if (!data.year || data.year < 2020) {
+      errors.push('Ano deve ser um valor válido');
     }
 
     if (!data.month || data.month < 1 || data.month > 12) {
       errors.push('Mês deve estar entre 1 e 12');
     }
 
-    if (data.monthly_fee !== undefined && (data.monthly_fee < 0 || data.monthly_fee > 9999.99)) {
-      errors.push('Mensalidade deve estar entre 0 e 9999.99');
-    }
+    // monthly_fee não é aceito na criação do período pelo backend
 
     if (errors.length > 0) {
       throw new ApiException('Dados inválidos para criação do período', 400, { errors });

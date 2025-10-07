@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import type { MonthlyPeriod, MonthlyPlayer, CasualPlayer } from "@/types/monthly"
 import { getCurrentMonth, formatMonthYear } from "@/lib/monthly-utils"
 import { MonthNavigation } from "@/components/month-navigation"
-import { CreateMonthCard } from "@/components/create-month-card"
 import { ImportPlayersDialog } from "@/components/import-players-dialog"
 import { AddCasualPlayerDialog } from "@/components/add-casual-player-dialog"
 import { PaymentStatusDropdown } from "@/components/payment-status-dropdown"
@@ -17,7 +16,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, DollarSign, TrendingUp, Download, UserPlus, Eye, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { PaymentsService } from "@/lib/services/payments"
+import paymentsService from "@/lib/services/payments"
 import AuthGuard from "@/components/auth-guard"
 
 export default function MonthlyPage() {
@@ -46,101 +45,67 @@ export default function MonthlyPage() {
     try {
       console.log(`[DEBUG] Carregando dados para ${currentMonth}/${currentYear}`)
       
-      // Buscar dados do período mensal atual
-      const paymentsResponse = await PaymentsService.getPaymentsByMonth(currentYear, currentMonth)
-      
-      console.log('[DEBUG] Resposta da API:', paymentsResponse)
-      
-      // A API retorna diretamente um array de pagamentos, não uma PaginatedResponse
-      if (!paymentsResponse || !Array.isArray(paymentsResponse)) {
-        console.log('[DEBUG] Sem dados na resposta, limpando estados')
-        setMonthlyPlayers([])
+      // Buscar período do mês/ano atual
+      const periodsResp = await paymentsService.getMonthlyPeriods({ year: currentYear, month: currentMonth })
+      const periods = periodsResp.data || []
+
+      // Selecionar exatamente o período referente ao mês/ano atuais
+      const periodApi = periods.find((p: any) => p?.month === currentMonth && p?.year === currentYear)
+
+      if (!periodApi) {
+        console.log('[DEBUG] Período do mês/ano atual não encontrado')
         setMonthlyPeriods([])
+        setMonthlyPlayers([])
+        setCasualPlayers([])
         return
       }
-      
-      console.log(`[DEBUG] Encontrados ${paymentsResponse.length} pagamentos`)
-      
-      // Converter dados da API para o formato local
-      const apiPlayers = paymentsResponse.map(payment => ({
-        id: payment.id,
-        playerId: payment.player_id.toString(),
-        monthlyPeriodId: payment.monthly_period_id.toString(),
-        playerName: payment.player?.name || 'Nome não encontrado',
-        position: payment.player?.position || 'Posição não definida',
-        monthlyFee: parseFloat(payment.player?.monthly_fee || '0'),
-        status: payment.payment_status === 'paid' ? 'paid' : 'pending',
-        paidAt: payment.payment_status === 'paid' ? new Date().toISOString() : undefined,
-        phone: payment.player?.phone || '',
-        email: payment.player?.email || ''
-      }))
-
-      console.log('[DEBUG] Jogadores processados:', apiPlayers)
-      setMonthlyPlayers(apiPlayers)
-
-      // Verificar se existe período mensal
-      if (paymentsResponse.length > 0) {
-        const period = paymentsResponse[0].monthly_period
-        console.log('[DEBUG] Período encontrado:', period)
-        
-        if (period) {
-          const formattedPeriod: MonthlyPeriod = {
-            id: period.id,
-            month: period.month,
-            year: period.year,
-            name: formatMonthYear(period.month, period.year),
-            isActive: true,
-            createdAt: period.created_at,
-            totalExpected: apiPlayers.reduce((sum, p) => sum + p.monthlyFee, 0),
-            totalReceived: apiPlayers.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.monthlyFee, 0),
-            playersCount: apiPlayers.length,
-          }
-          console.log('[DEBUG] Período formatado:', formattedPeriod)
-          setMonthlyPeriods([formattedPeriod])
-          
-          // Se o período existe mas não há jogadores, buscar diretamente do endpoint específico
-          if (apiPlayers.length === 0) {
-            console.log('[DEBUG] Período existe mas sem jogadores, buscando diretamente...')
-            try {
-              const periodPlayers = await PaymentsService.getMonthlyPeriodPlayers(period.id)
-              console.log('[DEBUG] Jogadores do período encontrados:', periodPlayers)
-              
-              if (periodPlayers && periodPlayers.length > 0) {
-                const formattedPlayers = periodPlayers.map(player => ({
-                  id: player.id,
-                  playerId: player.player_id.toString(),
-                  monthlyPeriodId: player.monthly_period_id.toString(),
-                  playerName: player.player?.name || player.player_name || 'Nome não encontrado',
-                  position: player.player?.position || player.position || 'Posição não definida',
-                  monthlyFee: parseFloat(player.amount?.toString() || player.player?.monthly_fee?.toString() || '0'),
-                  status: player.status === 'paid' ? 'paid' : 'pending',
-                  paidAt: player.payment_date || undefined,
-                  phone: player.player?.phone || player.phone || '',
-                  email: player.player?.email || player.email || ''
-                }))
-                
-                console.log('[DEBUG] Jogadores formatados do período:', formattedPlayers)
-                setMonthlyPlayers(formattedPlayers)
-                
-                // Atualizar período com dados corretos
-                const updatedPeriod = {
-                  ...formattedPeriod,
-                  totalExpected: formattedPlayers.reduce((sum, p) => sum + p.monthlyFee, 0),
-                  totalReceived: formattedPlayers.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.monthlyFee, 0),
-                  playersCount: formattedPlayers.length,
-                }
-                setMonthlyPeriods([updatedPeriod])
-              }
-            } catch (error) {
-              console.error('[DEBUG] Erro ao buscar jogadores do período:', error)
-            }
-          }
-        }
-      } else {
-        // Limpar dados se não houver período
-        console.log('[DEBUG] Nenhum pagamento encontrado, limpando períodos')
-        setMonthlyPeriods([])
+      const period: MonthlyPeriod = {
+        id: periodApi.id,
+        month: periodApi.month,
+        year: periodApi.year,
+        name: formatMonthYear(periodApi.month, periodApi.year),
+        isActive: !!periodApi.is_active,
+        createdAt: periodApi.created_at,
+        totalExpected: periodApi.total_expected ?? 0,
+        totalReceived: periodApi.total_received ?? 0,
+        playersCount: periodApi.players_count ?? 0,
       }
+      setMonthlyPeriods([period])
+
+      // Buscar jogadores do período
+      const playersResp = await paymentsService.getMonthlyPlayers(period.id, { page: 1, per_page: 100 })
+      const playersApi = playersResp.data || []
+      const players: MonthlyPlayer[] = playersApi.map(p => ({
+        id: p.id,
+        playerId: p.player_id,
+        monthlyPeriodId: p.monthly_period_id,
+        playerName: p.player?.name || p.player_name,
+        position: p.player?.position || p.position,
+        phone: p.player?.phone || p.phone,
+        email: p.player?.email || p.email,
+        monthlyFee: p.effective_monthly_fee ?? p.monthly_fee,
+        status: p.status === 'paid' ? 'paid' : 'pending',
+        paymentDate: p.payment_date,
+        joinDate: p.join_date,
+        pendingMonthsCount: p.pending_months_count,
+      }))
+      setMonthlyPlayers(players)
+
+      // Buscar jogadores avulsos
+      const casualResp = await paymentsService.getCasualPlayers(period.id)
+      const casualApi = casualResp.data || []
+      const casuals: CasualPlayer[] = casualApi.map(c => ({
+        id: c.id,
+        monthlyPeriodId: c.monthly_period_id,
+        playerName: c.player_name,
+        playDate: c.play_date,
+        invitedBy: c.invited_by,
+        amount: c.amount,
+        paymentDate: c.payment_date,
+        status: c.status === 'paid' ? 'paid' : 'pending',
+        createdAt: c.created_at,
+      }))
+      setCasualPlayers(casuals)
     } catch (error) {
       console.error('Erro ao carregar dados mensais:', error)
       toast({
@@ -179,14 +144,14 @@ export default function MonthlyPage() {
 
     try {
       // Criar período mensal no backend
-      const response = await PaymentsService.createMonthlyPeriod({
+      const response = await paymentsService.createMonthlyPeriod({
         year: currentYear,
         month: currentMonth
       })
 
       toast({
         title: "Sucesso",
-        description: `Período mensal criado com ${response.created_payments} pagamentos.`,
+        description: `Período mensal criado com sucesso.`,
       })
 
       // Recarregar dados após criação
@@ -241,7 +206,7 @@ export default function MonthlyPage() {
       }
 
       // Chamar API para adicionar jogadores ao período
-      const result = await PaymentsService.addPlayersToMonthlyPeriod(currentPeriod.id, playerIds)
+      const result = await paymentsService.addPlayersToMonthlyPeriod(currentPeriod.id, { player_ids: playerIds })
       
       toast({
         title: "Sucesso",
@@ -273,7 +238,7 @@ export default function MonthlyPage() {
       }
 
       // Atualizar status via API
-      await PaymentsService.updatePaymentStatus(player.paymentId, newStatus)
+      await paymentsService.updateMonthlyPlayerPayment(player.monthlyPeriodId, player.playerId, newStatus)
 
       toast({
         title: "Status atualizado",
@@ -357,27 +322,83 @@ export default function MonthlyPage() {
 
   const handleAddCasualPlayer = async (casualPlayer: Omit<CasualPlayer, "id">) => {
     try {
-      // TODO: Implementar criação via API
-      // const newCasualPlayer = await PaymentsService.createCasualPlayer(casualPlayer)
-      
-      // Por enquanto, criar localmente
-      const newCasualPlayer: CasualPlayer = {
-        ...casualPlayer,
-        id: `casual-${Date.now()}-${Math.random()}`,
+      if (!currentPeriod) {
+        toast({
+          title: "Erro",
+          description: "Nenhum período selecionado",
+          variant: "destructive"
+        })
+        return
       }
 
-      const updatedCasualPlayers = [...casualPlayers, newCasualPlayer]
-      setCasualPlayers(updatedCasualPlayers)
+      // Criar via API
+      const createData = {
+        player_name: casualPlayer.playerName,
+        play_date: casualPlayer.playDate,
+        invited_by: casualPlayer.invitedBy || '',
+        amount: casualPlayer.amount,
+        status: casualPlayer.status
+      }
 
-      toast({
-        title: "Jogador avulso adicionado",
-        description: `${casualPlayer.playerName} foi adicionado como avulso`,
-      })
+      const response = await paymentsService.addCasualPlayer(currentPeriod.id, createData)
+      
+      if (response.success && response.data) {
+        // Converter resposta da API para formato do frontend
+        const newCasualPlayer: CasualPlayer = {
+          id: response.data.id,
+          monthlyPeriodId: response.data.monthly_period_id,
+          playerName: response.data.player_name,
+          playDate: response.data.play_date,
+          invitedBy: response.data.invited_by,
+          amount: response.data.amount,
+          paymentDate: response.data.payment_date,
+          status: response.data.status === 'paid' ? 'paid' : 'pending',
+          createdAt: response.data.created_at,
+        }
+
+        const updatedCasualPlayers = [...casualPlayers, newCasualPlayer]
+        setCasualPlayers(updatedCasualPlayers)
+
+        toast({
+          title: "Jogador avulso adicionado",
+          description: `${casualPlayer.playerName} foi adicionado como avulso`,
+        })
+      }
     } catch (error) {
       console.error('Erro ao adicionar jogador avulso:', error)
       toast({
         title: "Erro",
         description: "Não foi possível adicionar o jogador avulso",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleRemoveCasualPlayer = async (casualPlayerId: string) => {
+    if (!currentPeriod) {
+      toast({
+        title: "Erro",
+        description: "Nenhum período selecionado",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      await paymentsService.removeCasualPlayer(currentPeriod.id, casualPlayerId)
+      
+      // Atualizar lista local
+      setCasualPlayers(prev => prev.filter(player => player.id !== casualPlayerId))
+      
+      toast({
+        title: "Sucesso",
+        description: "Jogador avulso removido com sucesso!",
+      })
+    } catch (error) {
+      console.error("Erro ao remover jogador avulso:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao remover jogador avulso",
         variant: "destructive"
       })
     }
@@ -390,10 +411,19 @@ export default function MonthlyPage() {
 
   const handleAdjustMonthlyFee = async (newFee: number) => {
     try {
-      // TODO: Implementar ajuste via API
-      // await PaymentsService.adjustMonthlyFee(currentPeriod.id, newFee)
+      // Ajustar mensalidade padrão do período via API
+      if (!currentPeriod) {
+        toast({
+          title: "Erro",
+          description: "Período mensal não encontrado.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      await paymentsService.updateMonthlyPeriod(currentPeriod.id, { monthly_fee: newFee })
       
-      // Por enquanto, atualizar localmente
+      // Atualizar localmente após sucesso
       const updatedPlayers = monthlyPlayers.map((player) => {
         if (currentPeriod && player.monthlyPeriodId === currentPeriod.id) {
           return {
@@ -445,27 +475,23 @@ export default function MonthlyPage() {
     pending:
       currentPeriodPlayers.filter((p) => p.status === "pending").length +
       currentPeriodCasualPlayers.filter((p) => p.status === "pending").length,
+    paid:
+      currentPeriodPlayers.filter((p) => p.status === "paid").length +
+      currentPeriodCasualPlayers.filter((p) => p.status === "paid").length,
+    casualCount: currentPeriodCasualPlayers.length,
   }
 
   const currentFee = currentPeriodPlayers.length > 0 ? currentPeriodPlayers[0].monthlyFee : 150
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background p-6">
+      <div className="min-h-screen bg-background p-4">
       <div className="max-w-7xl mx-auto">
         <MonthNavigation currentMonth={currentMonth} currentYear={currentYear} onMonthChange={handleMonthChange} />
 
-        {!currentPeriod ? (
-          <CreateMonthCard 
-            month={currentMonth} 
-            year={currentYear} 
-            onCreateMonth={handleCreateMonth}
-            isLoading={isCreatingMonth}
-          />
-        ) : (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="p-4">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <Card className="p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign className="h-4 w-4 text-green-500" />
                   <span className="text-sm text-muted-foreground">Recebido</span>
@@ -473,7 +499,7 @@ export default function MonthlyPage() {
                 <div className="text-2xl font-bold text-green-600">R$ {stats.received.toFixed(2)}</div>
               </Card>
 
-              <Card className="p-4">
+              <Card className="p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingUp className="h-4 w-4 text-blue-500" />
                   <span className="text-sm text-muted-foreground">Esperado</span>
@@ -481,12 +507,28 @@ export default function MonthlyPage() {
                 <div className="text-2xl font-bold text-blue-600">R$ {stats.expected.toFixed(2)}</div>
               </Card>
 
-              <Card className="p-4">
+              <Card className="p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                   <span className="text-sm text-muted-foreground">Pendentes</span>
                 </div>
                 <div className="text-2xl font-bold">{stats.pending}</div>
+              </Card>
+
+              <Card className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-emerald-500" />
+                  <span className="text-sm text-muted-foreground">Pagaram</span>
+                </div>
+                <div className="text-2xl font-bold text-emerald-600">{stats.paid}</div>
+              </Card>
+
+              <Card className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-4 w-4 text-purple-500" />
+                  <span className="text-sm text-muted-foreground">Avulsos no mês</span>
+                </div>
+                <div className="text-2xl font-bold text-purple-600">{stats.casualCount}</div>
               </Card>
             </div>
 
@@ -573,7 +615,7 @@ export default function MonthlyPage() {
                 </div>
               </Card>
             ) : (
-              <Card className="p-8 text-center">
+              <Card className="p-6 text-center">
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium mb-2">Nenhum jogador importado</h3>
                 <p className="text-muted-foreground mb-4">
@@ -636,7 +678,6 @@ export default function MonthlyPage() {
               </Card>
             )}
           </div>
-        )}
 
         <ImportPlayersDialog
           open={importDialogOpen}
@@ -664,6 +705,7 @@ export default function MonthlyPage() {
           onOpenChange={setCasualHistoryDialogOpen}
           casualPlayers={currentPeriodCasualPlayers}
           monthName={formatMonthYear(currentMonth, currentYear)}
+          onRemoveCasualPlayer={handleRemoveCasualPlayer}
         />
 
         <MonthlyFeeAdjustmentDialog

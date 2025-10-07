@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type { Expense } from "@/types/cashflow"
+import type { Expense } from "@/types/api"
+import type { UpdateExpenseRequest } from "@/lib/services"
 
 interface EditExpenseDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   expense: Expense | null
-  onEditExpense: (expenseId: string, updatedExpense: Omit<Expense, "id">) => void
+  onEditExpense: (expenseId: string, updatedExpense: UpdateExpenseRequest) => void
 }
 
 const categories = [
@@ -42,7 +43,7 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onEditExpense }
       setDescription(expense.description)
       setAmount(expense.amount.toString())
       setCategory(expense.category)
-      setDate(expense.date)
+      setDate(expense.expense_date)
     }
   }, [expense])
 
@@ -58,14 +59,11 @@ export function EditExpenseDialog({ open, onOpenChange, expense, onEditExpense }
       return
     }
 
-    const expenseDate = new Date(date)
-    const updatedExpense: Omit<Expense, "id"> = {
+    const updatedExpense: UpdateExpenseRequest = {
       description: description.trim(),
       amount: amountValue,
       category,
-      date,
-      month: expenseDate.getMonth() + 1,
-      year: expenseDate.getFullYear(),
+      expense_date: date,
     }
 
     onEditExpense(expense.id, updatedExpense)

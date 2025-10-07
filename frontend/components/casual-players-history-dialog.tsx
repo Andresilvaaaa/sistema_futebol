@@ -3,7 +3,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import { Calendar, User, DollarSign, UserCheck } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Calendar, User, DollarSign, UserCheck, MoreHorizontal, Trash2, Check, Clock } from "lucide-react"
 import type { CasualPlayer } from "@/types/monthly"
 
 interface CasualPlayersHistoryDialogProps {
@@ -11,6 +13,8 @@ interface CasualPlayersHistoryDialogProps {
   onOpenChange: (open: boolean) => void
   casualPlayers: CasualPlayer[]
   monthName: string
+  onRemoveCasualPlayer?: (casualPlayerId: string) => void
+  onUpdateCasualPlayerStatus?: (casualPlayerId: string, status: "paid" | "pending") => void
 }
 
 export function CasualPlayersHistoryDialog({
@@ -18,6 +22,8 @@ export function CasualPlayersHistoryDialog({
   onOpenChange,
   casualPlayers,
   monthName,
+  onRemoveCasualPlayer,
+  onUpdateCasualPlayerStatus,
 }: CasualPlayersHistoryDialogProps) {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR")
@@ -102,8 +108,53 @@ export function CasualPlayersHistoryDialog({
                       )}
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-lg font-bold">{formatCurrency(player.amount)}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <div className="text-lg font-bold">{formatCurrency(player.amount)}</div>
+                      </div>
+                      
+                      {(onRemoveCasualPlayer || onUpdateCasualPlayerStatus) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {onUpdateCasualPlayerStatus && (
+                              <>
+                                {player.status !== "paid" && (
+                                  <DropdownMenuItem 
+                                    onClick={() => onUpdateCasualPlayerStatus(player.id, "paid")}
+                                    className="cursor-pointer"
+                                  >
+                                    <Check className="h-4 w-4 mr-2 text-green-600" />
+                                    Marcar como Pago
+                                  </DropdownMenuItem>
+                                )}
+                                {player.status !== "pending" && (
+                                  <DropdownMenuItem 
+                                    onClick={() => onUpdateCasualPlayerStatus(player.id, "pending")}
+                                    className="cursor-pointer"
+                                  >
+                                    <Clock className="h-4 w-4 mr-2 text-orange-600" />
+                                    Marcar como Pendente
+                                  </DropdownMenuItem>
+                                )}
+                              </>
+                            )}
+                            {onRemoveCasualPlayer && (
+                              <DropdownMenuItem 
+                                onClick={() => onRemoveCasualPlayer(player.id)}
+                                className="cursor-pointer text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remover Avulso
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                 </Card>

@@ -1,71 +1,188 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import type { Expense } from "@/types/cashflow"
-import { mockExpenses } from "@/lib/cashflow-data"
+import type { Expense } from "@/types/api"
+import { expensesService, CreateExpenseRequest, UpdateExpenseRequest } from "@/lib/services"
+import { paymentsService } from "@/lib/services"
 import { AddExpenseDialog } from "@/components/add-expense-dialog"
 import { ExpenseCategoriesSummary } from "@/components/expense-categories-summary"
 import { ExpensesTable } from "@/components/expenses-table"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { TrendingDown, Calendar, DollarSign, Download } from "lucide-react"
+import { TrendingDown, Calendar, DollarSign, Download, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import AuthGuard from "@/components/auth-guard"
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [loading, setLoading] = useState(true)
+  const [currentPeriodId, setCurrentPeriodId] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
-    // Load expenses from localStorage or use mock data
+    loadCurrentPeriodAndExpenses()
+  }, [])
+
+  const loadCurrentPeriodAndExpenses = async () => {
+    try {
+      setLoading(true)
+      
+      // Buscar período atual (mês/ano atual)
+      const currentDate = new Date()
+      const currentMonth = currentDate.getMonth() + 1
+      const currentYear = currentDate.getFullYear()
+      
+      const periodsResponse = await paymentsService.getMonthlyPeriods({
+        month: currentMonth,
+        year: currentYear
+      })
+      
+      if (periodsResponse.success && periodsResponse.data.length > 0) {
+        const period = periodsResponse.data[0]
+        setCurrentPeriodId(period.id)
+        
+        // Carregar despesas do período atual
+        await loadExpenses(period.id)
+      } else {
+        // Se não há período atual, criar um vazio
+        setExpenses([])
+        toast({
+          title: "Aviso",
+          description: "Nenhum período mensal encontrado para o mês atual",
+          variant: "default"
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao carregar período e despesas:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar dados. Usando dados locais.",
+        variant: "destructive"
+      })
+      
+      // Fallback para dados locais
+      loadLocalExpenses()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadExpenses = async (periodId: string) => {
+    try {
+      const response = await expensesService.getExpenses(periodId)
+      if (response.success) {
+        setExpenses(response.data)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar despesas:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar despesas",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const loadLocalExpenses = () => {
+    // Fallback para dados locais (mock)
     const savedExpenses = localStorage.getItem("expenses")
     if (savedExpenses) {
       setExpenses(JSON.parse(savedExpenses))
     } else {
-      setExpenses(mockExpenses)
-      localStorage.setItem("expenses", JSON.stringify(mockExpenses))
+      setExpenses([])
     }
-  }, [])
-
-  const saveExpensesToStorage = (updatedExpenses: Expense[]) => {
-    setExpenses(updatedExpenses)
-    localStorage.setItem("expenses", JSON.stringify(updatedExpenses))
   }
 
-  const handleAddExpense = (newExpenseData: Omit<Expense, "id">) => {
-    const newExpense: Expense = {
-      ...newExpenseData,
-      id: Date.now().toString(),
+  const handleAddExpense = async (newExpenseData: CreateExpenseRequest) => {
+    if (!currentPeriodId) {
+      toast({
+        title: "Erro",
+        description: "Nenhum período mensal ativo encontrado",
+        variant: "destructive"
+      })
+      return
     }
-    const updatedExpenses = [...expenses, newExpense]
-    saveExpensesToStorage(updatedExpenses)
 
-    toast({
-      title: "Despesa adicionada",
-      description: `${newExpense.description} - R$ ${newExpense.amount.toLocaleString("pt-BR")}`,
-    })
+    try {
+      const response = await expensesService.createExpense(currentPeriodId, newExpenseData)
+      
+      if (response.success) {
+        setExpenses(prev => [...prev, response.data])
+        toast({
+          title: "Sucesso",
+          description: response.message || "Despesa adicionada com sucesso"
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar despesa:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao adicionar despesa",
+        variant: "destructive"
+      })
+    }
   }
 
-  const handleDeleteExpense = (expenseId: string) => {
-    const updatedExpenses = expenses.filter((e) => e.id !== expenseId)
-    saveExpensesToStorage(updatedExpenses)
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!currentPeriodId) {
+      toast({
+        title: "Erro",
+        description: "Nenhum período mensal ativo encontrado",
+        variant: "destructive"
+      })
+      return
+    }
 
-    toast({
-      title: "Despesa excluída",
-      description: "A despesa foi removida com sucesso",
-    })
+    try {
+      const response = await expensesService.deleteExpense(currentPeriodId, expenseId)
+      
+      if (response.success) {
+        setExpenses(prev => prev.filter(e => e.id !== expenseId))
+        toast({
+          title: "Sucesso",
+          description: response.message || "Despesa removida com sucesso"
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao remover despesa:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao remover despesa",
+        variant: "destructive"
+      })
+    }
   }
 
-  const handleEditExpense = (expenseId: string, updatedExpenseData: Omit<Expense, "id">) => {
-    const updatedExpenses = expenses.map((expense) =>
-      expense.id === expenseId ? { ...updatedExpenseData, id: expenseId } : expense,
-    )
-    saveExpensesToStorage(updatedExpenses)
+  const handleEditExpense = async (expenseId: string, updatedExpenseData: UpdateExpenseRequest) => {
+    if (!currentPeriodId) {
+      toast({
+        title: "Erro",
+        description: "Nenhum período mensal ativo encontrado",
+        variant: "destructive"
+      })
+      return
+    }
 
-    toast({
-      title: "Despesa atualizada",
-      description: `${updatedExpenseData.description} foi editada com sucesso`,
-    })
+    try {
+      const response = await expensesService.updateExpense(currentPeriodId, expenseId, updatedExpenseData)
+      
+      if (response.success) {
+        setExpenses(prev => prev.map(expense => 
+          expense.id === expenseId ? response.data : expense
+        ))
+        toast({
+          title: "Sucesso",
+          description: response.message || "Despesa atualizada com sucesso"
+        })
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar despesa:', error)
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar despesa",
+        variant: "destructive"
+      })
+    }
   }
 
   const currentMonth = new Date().getMonth() + 1
@@ -75,6 +192,19 @@ export default function ExpensesPage() {
   const monthlyExpenses = expenses
     .filter((e) => e.month === currentMonth && e.year === currentYear)
     .reduce((sum, expense) => sum + expense.amount, 0)
+
+  if (loading) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen bg-background p-6 flex items-center justify-center">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Carregando despesas...</span>
+          </div>
+        </div>
+      </AuthGuard>
+    )
+  }
 
   return (
     <AuthGuard>

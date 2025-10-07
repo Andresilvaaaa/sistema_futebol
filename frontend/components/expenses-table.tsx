@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import type { Expense } from "@/types/cashflow"
+import type { Expense } from "@/types/api"
+import type { UpdateExpenseRequest } from "@/lib/services"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,7 +15,7 @@ import { Search, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 interface ExpensesTableProps {
   expenses: Expense[]
   onDeleteExpense: (expenseId: string) => void
-  onEditExpense: (expenseId: string, updatedExpense: Omit<Expense, "id">) => void
+  onEditExpense: (expenseId: string, updatedExpense: UpdateExpenseRequest) => void
 }
 
 export function ExpensesTable({ expenses, onDeleteExpense, onEditExpense }: ExpensesTableProps) {

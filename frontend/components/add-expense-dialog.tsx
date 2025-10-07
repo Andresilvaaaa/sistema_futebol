@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import type { Expense } from "@/types/cashflow"
+import type { CreateExpenseRequest } from "@/lib/services"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plus } from "lucide-react"
 
 interface AddExpenseDialogProps {
-  onAddExpense: (expense: Omit<Expense, "id">) => void
+  onAddExpense: (expense: CreateExpenseRequest) => void
 }
 
 export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
@@ -27,28 +27,24 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
   })
 
   const categories = [
-    "Campo",
-    "Equipamentos",
-    "Uniformes",
-    "Transporte",
-    "Alimentação",
-    "Arbitragem",
-    "Manutenção",
-    "Marketing",
-    "Outros",
+    { label: "Equipamentos", value: "equipment" },
+    { label: "Aluguel de Campo", value: "field_rental" },
+    { label: "Arbitragem", value: "referee" },
+    { label: "Transporte", value: "transportation" },
+    { label: "Alimentação", value: "food" },
+    { label: "Médico", value: "medical" },
+    { label: "Manutenção", value: "maintenance" },
+    { label: "Outros", value: "other" },
   ]
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    const date = new Date(formData.date)
-    const expense: Omit<Expense, "id"> = {
+    const expense: CreateExpenseRequest = {
       description: formData.description,
       amount: Number.parseFloat(formData.amount),
       category: formData.category,
-      date: formData.date,
-      month: date.getMonth() + 1,
-      year: date.getFullYear(),
+      expense_date: formData.date,
     }
 
     onAddExpense(expense)
@@ -111,8 +107,8 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
               </SelectTrigger>
               <SelectContent>
                 {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                  <SelectItem key={category.value} value={category.value}>
+                    {category.label}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -108,10 +108,13 @@ class MonthlyPaymentResponseSchema(Schema):
 
 class CasualPlayerCreateSchema(Schema):
     """Schema para criação de jogadores casuais"""
-    name = fields.Str(required=True, validate=validate.Length(min=2, max=100))
-    phone = fields.Str(validate=validate.Length(max=20), allow_none=True)
-    email = fields.Email(allow_none=True)
-    notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
+    player_name = fields.Str(required=True, validate=validate.Length(min=2, max=100))
+    play_date = fields.Date(required=True)
+    invited_by = fields.Str(required=True, validate=validate.Length(min=1, max=100))
+    amount = fields.Decimal(required=True, validate=validate.Range(min=0))
+    status = fields.Str(validate=validate.OneOf([
+        'pending', 'paid'
+    ]), missing='pending')
 
 
 class CasualPlayerResponseSchema(Schema):
@@ -236,6 +239,13 @@ class PaymentFilterSchema(Schema):
     ]))
     page = fields.Int(validate=validate.Range(min=1), missing=1)
     per_page = fields.Int(validate=validate.Range(min=1, max=100), missing=20)
+
+# ==================== SCHEMA DE ATUALIZAÇÃO DE PERÍODO MENSAL ====================
+
+class MonthlyPeriodUpdateSchema(Schema):
+    """Schema para atualização de período mensal"""
+    monthly_fee = fields.Decimal(validate=validate.Range(min=0))
+    status = fields.Str(validate=validate.OneOf(['active', 'closed']))
 
 
 class ExpenseFilterSchema(Schema):
