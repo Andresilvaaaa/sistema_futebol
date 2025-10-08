@@ -1,22 +1,13 @@
 import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import type { PlayerStats } from "@/types/player"
 
 interface StatsCardsProps {
   stats: PlayerStats
-  onOpenDetails?: () => void
 }
 
-export function StatsCards({ stats, onOpenDetails }: StatsCardsProps) {
+export function StatsCards({ stats }: StatsCardsProps) {
   return (
     <div className="mb-6">
-      {onOpenDetails && (
-        <div className="flex justify-end mb-2">
-          <Button variant="outline" size="sm" onClick={onOpenDetails}>
-            Ver Detalhes
-          </Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <Card className="p-4 border-l-4 border-l-blue-500">
         <div className="flex items-center gap-2">

@@ -180,12 +180,17 @@ export class AuthService {
   // Faz login
   static async login(username: string, password: string): Promise<{ success: boolean; error?: string; user?: User }> {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch('/api/auth/login', {
          method: 'POST',
          headers: {
            'Content-Type': 'application/json',
          },
-         body: JSON.stringify({ username, password }),
+         // Se o campo username parecer um email, enviar como 'email' para o backend
+         body: JSON.stringify(
+           username && username.includes('@')
+             ? { email: username, password }
+             : { username, password }
+         ),
        });
 
       if (!response.ok) {
@@ -195,12 +200,12 @@ export class AuthService {
 
       const data = await response.json();
       
-      // Create user object with proper structure
+      // Montar objeto User usando dados reais retornados pelo backend
       const user: User = {
-        id: data.user.username, // Use username as ID for now
-        name: data.user.username,
-        email: `${data.user.username}@futebol.com`,
-        role: data.user.username === 'admin' ? 'admin' : 'user'
+        id: String(data.user.id ?? data.user.username ?? 'unknown'),
+        name: data.user.username ?? data.user.email ?? 'Usuário',
+        email: data.user.email ?? `${data.user.username ?? 'user'}@futebol.com`,
+        role: ((data.user.username === 'admin') || (data.user.email && data.user.email.startsWith('admin'))) ? 'admin' : 'user'
       };
       
       // Armazena token em cookie seguro
@@ -222,50 +227,54 @@ export class AuthService {
 
   // Faz cadastro
   static async register(name: string, email: string, password: string): Promise<{ success: boolean; error?: string; user?: User }> {
-    // Simula delay de rede
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // Verifica se email já existe
-    const existingUser = MOCK_USERS.find(u => u.email === email)
-    if (existingUser) {
-      return { success: false, error: 'Email já cadastrado' }
-    }
+    try {
+      // Validações básicas no frontend
+      if (name.length < 2) {
+        return { success: false, error: 'Nome deve ter pelo menos 2 caracteres' }
+      }
+      if (password.length < 6) {
+        return { success: false, error: 'Senha deve ter pelo menos 6 caracteres' }
+      }
+      if (!email.includes('@')) {
+        return { success: false, error: 'Email inválido' }
+      }
 
-    // Validações básicas
-    if (name.length < 2) {
-      return { success: false, error: 'Nome deve ter pelo menos 2 caracteres' }
-    }
+      // Chama backend para registrar
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: name, email, password }),
+      })
 
-    if (password.length < 6) {
-      return { success: false, error: 'Senha deve ter pelo menos 6 caracteres' }
-    }
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Falha no cadastro' }
+      }
 
-    if (!email.includes('@')) {
-      return { success: false, error: 'Email inválido' }
-    }
+      const user: User = {
+        id: String(data.user.id ?? 'unknown'),
+        name: data.user.username ?? name,
+        email: data.user.email ?? email,
+        role: 'user'
+      }
 
-    // Cria novo usuário
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      role: 'user'
-    }
+      // Armazena token retornado pelo backend
+      if (data.access_token) {
+        CookieManager.set(TOKEN_STORAGE_KEY, data.access_token, 7)
+      }
 
-    // Gera token JWT
-    const authToken = JWTManager.generateToken(newUser)
-    
-    // Armazena token em cookie seguro
-    CookieManager.set(TOKEN_STORAGE_KEY, authToken.token, 7)
-    
-    // Mantém dados no localStorage para compatibilidade
-    const authData = {
-      user: newUser,
-      expiresAt: authToken.expiresAt
+      const authData = {
+        user,
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+      }
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
+
+      return { success: true, user }
+    } catch (err) {
+      return { success: false, error: 'Erro inesperado no cadastro' }
     }
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
-    
-    return { success: true, user: newUser }
   }
 
   // Faz logout

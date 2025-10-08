@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Importação de Jogadores</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+        .step {
+            background: #e9ecef;
+            padding: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+        .data-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug - Importação de Jogadores</h1>
+    
+    <div class="container">
+        <h2>🚀 Testes de Funcionalidade</h2>
+        <button class="button" onclick="testLogin()">1. Fazer Login</button>
+        <button class="button" onclick="testListPeriods()">2. Listar Períodos</button>
+        <button class="button" onclick="testListPlayers()">3. Listar Jogadores</button>
+        <button class="button" onclick="testImportPlayers()">4. Testar Importação</button>
+        <button class="button" onclick="clearLogs()">🗑️ Limpar Logs</button>
+    </div>
+
+    <div class="container">
+        <h2>📊 Status Atual</h2>
+        <div id="status">
+            <p><strong>Token:</strong> <span id="tokenStatus">❌ Não autenticado</span></p>
+            <p><strong>Período Atual:</strong> <span id="periodStatus">❌ Nenhum período selecionado</span></p>
+            <p><strong>Jogadores Disponíveis:</strong> <span id="playersStatus">❌ Nenhum jogador carregado</span></p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Logs de Debug</h2>
+        <div id="logs" class="log"></div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let currentPeriod = null;
+        let availablePlayers = [];
+
+        const API_BASE = window.location.origin;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('logs');
+            const className = type === 'success' ? 'success' : 
+                            type === 'error' ? 'error' : 
+                            type === 'warning' ? 'warning' : 'info';
+            
+            logElement.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function updateStatus() {
+            document.getElementById('tokenStatus').textContent = authToken ? '✅ Autenticado' : '❌ Não autenticado';
+            document.getElementById('periodStatus').textContent = currentPeriod ? 
+                `✅ ${currentPeriod.month}/${currentPeriod.year} (ID: ${currentPeriod.id.substring(0, 8)}...)` : 
+                '❌ Nenhum período selecionado';
+            document.getElementById('playersStatus').textContent = availablePlayers.length > 0 ? 
+                `✅ ${availablePlayers.length} jogadores carregados` : 
+                '❌ Nenhum jogador carregado';
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        function getHeaders() {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            return headers;
+        }
+
+        async function testLogin() {
+            log('🔐 Iniciando processo de login...');
+            
+            const credentials = {
+                email: 'admin@admin.com',
+                password: 'admin123'
+            };
+
+            try {
+                log(`📤 Enviando credenciais para ${API_BASE}/api/auth/login`);
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(credentials)
+                });
+
+                log(`📡 Status da resposta: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    log('✅ Login realizado com sucesso!', 'success');
+                    log(`🔑 Token obtido: ${authToken.substring(0, 20)}...`);
+                    updateStatus();
+                } else {
+                    const errorData = await response.json();
+                    log(`❌ Erro no login: ${JSON.stringify(errorData)}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Erro na requisição: ${error.message}`, 'error');
+            }
+        }
+
+        async function testListPeriods() {
+            if (!authToken) {
+                log('❌ Faça login primeiro!', 'error');
+                return;
+            }
+
+            log('📅 Listando períodos mensais...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/monthly-periods`, {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+                
+                log(`📡 Status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Períodos encontrados: ${data.length}`, 'success');
+                    
+                    if (data.length > 0) {
+                        // Selecionar o período mais recente
+                        currentPeriod = data[0];
+                        log(`📅 Período selecionado: ${currentPeriod.month}/${currentPeriod.year}`);
+                        log(`🆔 ID do período: ${currentPeriod.id}`);
+                        
+                        // Mostrar detalhes do período
+                        const periodDetails = document.createElement('div');
+                        periodDetails.className = 'data-display';
+                        periodDetails.innerHTML = `<strong>Detalhes do Período:</strong>\n${JSON.stringify(currentPeriod, null, 2)}`;
+                        document.getElementById('logs').appendChild(periodDetails);
+                        
+                        updateStatus();
+                    } else {
+                        log('⚠️ Nenhum período encontrado', 'warning');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    log(`❌ Erro: ${JSON.stringify(errorData)}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Erro: ${error.message}`, 'error');
+            }
+        }
+
+        async function testListPlayers() {
+            if (!authToken) {
+                log('❌ Faça login primeiro!', 'error');
+                return;
+            }
+
+            log('👥 Listando jogadores ativos...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/players?status=active&page=1&per_page=100`, {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+                
+                log(`📡 Status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    availablePlayers = data.data || [];
+                    log(`✅ Jogadores encontrados: ${availablePlayers.length}`, 'success');
+                    
+                    if (availablePlayers.length > 0) {
+                        log(`👥 Primeiros jogadores:`);
+                        availablePlayers.slice(0, 5).forEach(player => {
+                            log(`  - ${player.name} (ID: ${player.id}, Posição: ${player.position})`);
+                        });
+                        
+                        // Mostrar detalhes dos jogadores
+                        const playersDetails = document.createElement('div');
+                        playersDetails.className = 'data-display';
+                        playersDetails.innerHTML = `<strong>Jogadores Disponíveis:</strong>\n${JSON.stringify(availablePlayers.slice(0, 3), null, 2)}`;
+                        document.getElementById('logs').appendChild(playersDetails);
+                        
+                        updateStatus();
+                    } else {
+                        log('⚠️ Nenhum jogador ativo encontrado', 'warning');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    log(`❌ Erro: ${JSON.stringify(errorData)}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Erro: ${error.message}`, 'error');
+            }
+        }
+
+        async function testImportPlayers() {
+            if (!authToken) {
+                log('❌ Faça login primeiro!', 'error');
+                return;
+            }
+            
+            if (!currentPeriod) {
+                log('❌ Nenhum período selecionado. Execute "Listar Períodos" primeiro.', 'error');
+                return;
+            }
+            
+            if (availablePlayers.length === 0) {
+                log('❌ Nenhum jogador disponível. Execute "Listar Jogadores" primeiro.', 'error');
+                return;
+            }
+            
+            log('🎯 Testando importação de jogadores...');
+            
+            // Selecionar os primeiros 2 jogadores para teste
+            const playersToImport = availablePlayers.slice(0, 2);
+            const playerIds = playersToImport.map(p => p.id);
+            
+            log(`🎯 Importando jogadores: ${playersToImport.map(p => p.name).join(', ')}`);
+            log(`🎯 IDs: ${JSON.stringify(playerIds)}`);
+            
+            const importData = {
+                player_ids: playerIds
+            };
+            
+            const url = `${API_BASE}/api/monthly-periods/${currentPeriod.id}/players`;
+            log(`📤 URL: ${url}`);
+            log(`📤 Dados: ${JSON.stringify(importData, null, 2)}`);
+            log(`📤 Headers: ${JSON.stringify(getHeaders(), null, 2)}`);
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(importData)
+                });
+                
+                log(`📡 Status da resposta: ${response.status}`);
+                log(`📡 Headers da resposta: ${JSON.stringify([...response.headers.entries()])}`, 'info');
+                
+                const responseText = await response.text();
+                log(`📡 Resposta bruta: ${responseText}`);
+                
+                let responseData;
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (e) {
+                    log(`⚠️ Resposta não é JSON válido: ${e.message}`, 'warning');
+                    responseData = { raw: responseText };
+                }
+                
+                if (response.ok) {
+                    log('✅ Importação realizada com sucesso!', 'success');
+                    log(`📊 Resultado: ${JSON.stringify(responseData, null, 2)}`);
+                } else {
+                    log(`❌ Erro na importação (${response.status}):`, 'error');
+                    log(`❌ Detalhes: ${JSON.stringify(responseData, null, 2)}`, 'error');
+                    
+                    // Análise específica de erros comuns
+                    if (response.status === 400) {
+                        log('🔍 Erro 400 - Possíveis causas:', 'warning');
+                        log('  - Jogadores já existem no período', 'warning');
+                        log('  - Dados de entrada inválidos', 'warning');
+                        log('  - IDs de jogadores não encontrados', 'warning');
+                    } else if (response.status === 404) {
+                        log('🔍 Erro 404 - Período não encontrado', 'warning');
+                    } else if (response.status === 500) {
+                        log('🔍 Erro 500 - Erro interno do servidor', 'warning');
+                    }
+                }
+                
+                // Mostrar resposta completa
+                const responseDetails = document.createElement('div');
+                responseDetails.className = 'data-display';
+                responseDetails.innerHTML = `<strong>Resposta Completa da Importação:</strong>\n${JSON.stringify(responseData, null, 2)}`;
+                document.getElementById('logs').appendChild(responseDetails);
+                
+            } catch (error) {
+                log(`💥 Erro na requisição: ${error.message}`, 'error');
+                log(`💥 Stack trace: ${error.stack}`, 'error');
+            }
+        }
+
+        // Inicializar status
+        updateStatus();
+        
+        log('🚀 Debug de Importação de Jogadores iniciado!');
+        log('📋 Siga os passos na ordem: Login → Listar Períodos → Listar Jogadores → Testar Importação');
+    </script>
+</body>
+</html>

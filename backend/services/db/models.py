@@ -15,6 +15,7 @@ import uuid
 
 # Importar db do Flask-SQLAlchemy
 from .connection import db
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 class PlayerStatus(Enum):
@@ -32,17 +33,17 @@ class PaymentStatus(Enum):
 
 
 class Player(db.Model):
-    """Modelo para jogadores regulares"""
+    """Modelo para jogadores do time"""
     __tablename__ = 'players'
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), nullable=False, index=True)
     position = Column(String(50), nullable=False)
-    phone = Column(String(20), nullable=False)
-    email = Column(String(100), nullable=False, unique=True, index=True)
+    phone = Column(String(20), nullable=False, unique=True)
+    email = Column(String(120), nullable=True, index=True)  # Tornado opcional
     join_date = Column(Date, nullable=False, default=func.current_date())
     status = Column(String(20), nullable=False, default=PlayerStatus.ACTIVE.value)
-    monthly_fee = Column(Numeric(10, 2), nullable=False, default=0.00)
+    # monthly_fee removido - controlado na gestão mensal
     is_active = Column(Boolean, nullable=False, default=True)
     
     # Timestamps
@@ -61,9 +62,9 @@ class Player(db.Model):
     
     @validates('email')
     def validate_email(self, key, email):
-        if '@' not in email:
+        if email and '@' not in email:  # Só valida se email foi fornecido
             raise ValueError("Email deve conter @")
-        return email.lower()
+        return email.lower() if email else None
     
     def __repr__(self):
         return f"<Player(id={self.id}, name='{self.name}', status='{self.status}')>"
@@ -241,3 +242,45 @@ Index('idx_expenses_period', Expense.monthly_period_id, Expense.month, Expense.y
 
 # Índice único para evitar períodos duplicados
 Index('idx_monthly_periods_unique', MonthlyPeriod.month, MonthlyPeriod.year, unique=True)
+
+class User(db.Model):
+    """Modelo de usuário para autenticação e perfil"""
+    __tablename__ = 'users'
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String(50), nullable=False, unique=True, index=True)
+    email = Column(String(100), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def set_password(self, password: str):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        return check_password_hash(self.password_hash, password)
+
+    @validates('email')
+    def validate_email(self, key, email):
+        if '@' not in email:
+            raise ValueError("Email deve conter @")
+        return email.lower()
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
+
+# Índices para usuário (após a definição da classe)
+Index('idx_users_username_unique', User.username, unique=True)
+Index('idx_users_email_unique', User.email, unique=True)

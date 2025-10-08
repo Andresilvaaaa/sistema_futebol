@@ -4,6 +4,7 @@
  */
 
 import { api, StandardApiResponse, PaginatedApiResponse, ApiException } from '../api';
+import { toNum } from '../monthly-utils';
 import {
   MonthlyPeriod,
   MonthlyPlayer,
@@ -26,29 +27,46 @@ export class PaymentsService {
    */
   async getMonthlyPeriods(filters?: { year?: number; month?: number }): Promise<PaginatedApiResponse<MonthlyPeriod>> {
     try {
-      const response = await api.get<any>(
+      const response = await api.get<MonthlyPeriod[] | PaginatedApiResponse<MonthlyPeriod>>(
         this.baseEndpoint,
         filters
       );
 
       // Backend retorna um array simples; adaptamos para o formato paginado esperado
       if (Array.isArray(response)) {
+        const normalized = response.map((p) => ({
+          ...p,
+          year: toNum(p.year),
+          month: toNum(p.month),
+          total_expected: toNum(p.total_expected),
+          total_received: toNum(p.total_received),
+          players_count: toNum(p.players_count),
+        }));
         return {
           success: true,
-          data: response,
+          data: normalized,
           pagination: {
             page: 1,
             pages: 1,
-            per_page: response.length,
-            total: response.length,
+            per_page: normalized.length,
+            total: normalized.length,
             has_next: false,
             has_prev: false,
           },
         } as PaginatedApiResponse<MonthlyPeriod>;
       }
 
-      this.validatePaginatedResponse(response as PaginatedApiResponse<MonthlyPeriod>);
-      return response as PaginatedApiResponse<MonthlyPeriod>;
+      const typedResponse = response as PaginatedApiResponse<MonthlyPeriod>;
+      this.validatePaginatedResponse(typedResponse);
+      const data = (typedResponse.data || []).map((p) => ({
+        ...p,
+        year: toNum(p.year),
+        month: toNum(p.month),
+        total_expected: toNum(p.total_expected),
+        total_received: toNum(p.total_received),
+        players_count: toNum(p.players_count),
+      }));
+      return { ...typedResponse, data };
     } catch (error) {
       throw this.handleServiceError('Erro ao buscar períodos mensais', error);
     }
@@ -68,8 +86,15 @@ export class PaymentsService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: MonthlyPeriod = {
+        ...response.data,
+        year: toNum(response.data.year),
+        month: toNum(response.data.month),
+        total_expected: toNum(response.data.total_expected),
+        total_received: toNum(response.data.total_received),
+        players_count: toNum(response.data.players_count),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar período ${id}`, error);
     }
@@ -89,21 +114,38 @@ export class PaymentsService {
 
     try {
       // Criação de período ocorre em /monthly-payments no backend
-      const response = await api.post<any>(
+      const response = await api.post<StandardApiResponse<MonthlyPeriod> | MonthlyPeriod>(
         '/api/monthly-payments',
         payload
       );
 
       // Backend pode retornar resposta padronizada ou objeto; normalizar
       if (response && typeof response === 'object' && 'success' in response) {
-        this.validateStandardResponse(response as StandardApiResponse<MonthlyPeriod>);
-        return response as StandardApiResponse<MonthlyPeriod>;
+        const std = response as StandardApiResponse<MonthlyPeriod>;
+        this.validateStandardResponse(std);
+        const normalized: MonthlyPeriod = {
+          ...std.data,
+          year: toNum(std.data.year),
+          month: toNum(std.data.month),
+          total_expected: toNum(std.data.total_expected),
+          total_received: toNum(std.data.total_received),
+          players_count: toNum(std.data.players_count),
+        };
+        return { ...std, data: normalized };
       }
 
       // Caso retorne o objeto do período diretamente
+      const normalized: MonthlyPeriod = {
+        ...(response as MonthlyPeriod),
+        year: toNum((response as MonthlyPeriod).year),
+        month: toNum((response as MonthlyPeriod).month),
+        total_expected: toNum((response as MonthlyPeriod).total_expected),
+        total_received: toNum((response as MonthlyPeriod).total_received),
+        players_count: toNum((response as MonthlyPeriod).players_count),
+      };
       return {
         success: true,
-        data: response as MonthlyPeriod,
+        data: normalized,
         message: 'Período criado com sucesso',
       } as StandardApiResponse<MonthlyPeriod>;
     } catch (error) {
@@ -128,8 +170,15 @@ export class PaymentsService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: MonthlyPeriod = {
+        ...response.data,
+        year: toNum(response.data.year),
+        month: toNum(response.data.month),
+        total_expected: toNum(response.data.total_expected),
+        total_received: toNum(response.data.total_received),
+        players_count: toNum(response.data.players_count),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao atualizar período ${id}`, error);
     }
@@ -167,29 +216,46 @@ export class PaymentsService {
     }
 
     try {
-      const response = await api.get<any>(
+      const response = await api.get<MonthlyPlayer[] | PaginatedApiResponse<MonthlyPlayer>>(
         `/api/monthly-periods/${periodId}/players`,
         filters
       );
 
       // Backend retorna array simples; adaptar para paginado
       if (Array.isArray(response)) {
+        const normalized = response.map((p) => ({
+          ...p,
+          monthly_fee: toNum(p.monthly_fee),
+          custom_monthly_fee: p.custom_monthly_fee !== undefined ? toNum(p.custom_monthly_fee) : undefined,
+          effective_monthly_fee: toNum(p.effective_monthly_fee),
+          amount_paid: toNum(p.amount_paid),
+          pending_months_count: toNum(p.pending_months_count),
+        }));
         return {
           success: true,
-          data: response,
+          data: normalized,
           pagination: {
             page: 1,
             pages: 1,
-            per_page: response.length,
-            total: response.length,
+            per_page: normalized.length,
+            total: normalized.length,
             has_next: false,
             has_prev: false,
           },
         } as PaginatedApiResponse<MonthlyPlayer>;
       }
 
-      this.validatePaginatedResponse(response as PaginatedApiResponse<MonthlyPlayer>);
-      return response as PaginatedApiResponse<MonthlyPlayer>;
+      const typedResponse = response as PaginatedApiResponse<MonthlyPlayer>;
+      this.validatePaginatedResponse(typedResponse);
+      const data = (typedResponse.data || []).map((p) => ({
+        ...p,
+        monthly_fee: toNum(p.monthly_fee),
+        custom_monthly_fee: p.custom_monthly_fee !== undefined ? toNum(p.custom_monthly_fee) : undefined,
+        effective_monthly_fee: toNum(p.effective_monthly_fee),
+        amount_paid: toNum(p.amount_paid),
+        pending_months_count: toNum(p.pending_months_count),
+      }));
+      return { ...typedResponse, data };
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar jogadores do período ${periodId}`, error);
     }
@@ -199,22 +265,51 @@ export class PaymentsService {
    * Adiciona jogadores a um período mensal
    */
   async addPlayersToMonthlyPeriod(periodId: string, playersData: AddPlayersToMonthlyPeriodRequest): Promise<StandardApiResponse<MonthlyPlayer[]>> {
+    console.log('[PaymentsService] addPlayersToMonthlyPeriod - INÍCIO');
+    console.log('[PaymentsService] periodId:', periodId);
+    console.log('[PaymentsService] playersData:', playersData);
+    
     if (!periodId?.trim()) {
+      console.error('[PaymentsService] Erro: ID do período é obrigatório');
       throw new ApiException('ID do período é obrigatório', 400);
     }
 
     this.validateAddPlayersData(playersData);
+    console.log('[PaymentsService] Dados validados com sucesso');
 
     try {
+      const endpoint = `/api/monthly-periods/${periodId}/players`;
+      console.log('[PaymentsService] Endpoint da API:', endpoint);
+      console.log('[PaymentsService] Dados a serem enviados:', JSON.stringify(playersData, null, 2));
+      
+      console.log('[PaymentsService] Chamando api.post...');
       const response = await api.post<StandardApiResponse<MonthlyPlayer[]>>(
-        `/api/monthly-periods/${periodId}/players`,
+        endpoint,
         playersData
       );
       
-      this.validateStandardResponse(response);
+      console.log('[PaymentsService] Resposta recebida da API:', response);
       
-      return response;
+      this.validateStandardResponse(response);
+      console.log('[PaymentsService] Resposta validada com sucesso');
+      
+      const normalized = (response.data || []).map((p) => ({
+        ...p,
+        monthly_fee: toNum(p.monthly_fee),
+        custom_monthly_fee: p.custom_monthly_fee !== undefined ? toNum(p.custom_monthly_fee) : undefined,
+        effective_monthly_fee: toNum(p.effective_monthly_fee),
+        amount_paid: toNum(p.amount_paid),
+        pending_months_count: toNum(p.pending_months_count),
+      }));
+      
+      console.log('[PaymentsService] Dados normalizados:', normalized);
+      console.log('[PaymentsService] addPlayersToMonthlyPeriod - SUCESSO');
+      
+      return { ...response, data: normalized };
     } catch (error) {
+      console.error('[PaymentsService] Erro ao adicionar jogadores:', error);
+      console.error('[PaymentsService] Tipo do erro:', typeof error);
+      console.error('[PaymentsService] Stack trace:', error instanceof Error ? error.stack : 'N/A');
       throw this.handleServiceError(`Erro ao adicionar jogadores ao período ${periodId}`, error);
     }
   }
@@ -240,8 +335,15 @@ export class PaymentsService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: MonthlyPlayer = {
+        ...response.data,
+        monthly_fee: toNum(response.data.monthly_fee),
+        custom_monthly_fee: response.data.custom_monthly_fee !== undefined ? toNum(response.data.custom_monthly_fee) : undefined,
+        effective_monthly_fee: toNum(response.data.effective_monthly_fee),
+        amount_paid: toNum(response.data.amount_paid),
+        pending_months_count: toNum(response.data.pending_months_count),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao atualizar pagamento do jogador ${playerId}`, error);
     }
@@ -267,8 +369,15 @@ export class PaymentsService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: MonthlyPlayer = {
+        ...response.data,
+        monthly_fee: toNum(response.data.monthly_fee),
+        custom_monthly_fee: response.data.custom_monthly_fee !== undefined ? toNum(response.data.custom_monthly_fee) : undefined,
+        effective_monthly_fee: toNum(response.data.effective_monthly_fee),
+        amount_paid: toNum(response.data.amount_paid),
+        pending_months_count: toNum(response.data.pending_months_count),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao atualizar mensalidade customizada do jogador ${playerId}`, error);
     }
@@ -309,20 +418,29 @@ export class PaymentsService {
     }
 
     try {
-      const response = await api.get<any>(
+      const response = await api.get<CasualPlayer[] | StandardApiResponse<CasualPlayer[]>>(
         `${this.baseEndpoint}/${periodId}/casual-players`
       );
 
       // Backend retorna array direto; normalizar
       if (Array.isArray(response)) {
+        const normalized = response.map((c) => ({
+          ...c,
+          amount: toNum(c.amount),
+        }));
         return {
           success: true,
-          data: response,
+          data: normalized,
         } as StandardApiResponse<CasualPlayer[]>;
       }
 
-      this.validateStandardResponse(response as StandardApiResponse<CasualPlayer[]>);
-      return response as StandardApiResponse<CasualPlayer[]>;
+      const typedResponse = response as StandardApiResponse<CasualPlayer[]>;
+      this.validateStandardResponse(typedResponse);
+      const normalized = (typedResponse.data || []).map((c) => ({
+        ...c,
+        amount: toNum(c.amount),
+      }));
+      return { ...typedResponse, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar jogadores avulsos do período ${periodId}`, error);
     }
@@ -345,8 +463,11 @@ export class PaymentsService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: CasualPlayer = {
+        ...response.data,
+        amount: toNum(response.data.amount),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao adicionar jogador avulso ao período ${periodId}`, error);
     }
@@ -402,7 +523,12 @@ export class PaymentsService {
 
       this.validateStandardResponse(response);
 
-      return response;
+      const normalized: CasualPlayer = {
+        ...response.data,
+        amount: toNum(response.data.amount),
+      };
+
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(
         `Erro ao atualizar pagamento do avulso ${casualPlayerId}`,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import type { MonthlyFinancials, CashFlowSummary } from "@/types/cashflow"
-import { generateMockFinancials } from "@/lib/cashflow-data"
+import { getCashflowByMonth, getCashflowSummary } from "@/lib/cashflow-data"
 import { FinancialSummaryCards } from "@/components/financial-summary-cards"
 import { MonthlyBreakdown } from "@/components/monthly-breakdown"
 import { Button } from "@/components/ui/button"
@@ -19,31 +19,13 @@ export default function CashFlowPage() {
   })
 
   useEffect(() => {
-    // Load or generate financial data
-    const savedFinancials = localStorage.getItem("monthlyFinancials")
-    let monthlyData: MonthlyFinancials[]
-
-    if (savedFinancials) {
-      monthlyData = JSON.parse(savedFinancials)
-    } else {
-      monthlyData = generateMockFinancials()
-      localStorage.setItem("monthlyFinancials", JSON.stringify(monthlyData))
+    const load = async () => {
+      const monthlyData = await getCashflowByMonth()
+      setFinancials(monthlyData)
+      const s = await getCashflowSummary(monthlyData)
+      setSummary(s)
     }
-
-    setFinancials(monthlyData)
-
-    // Calculate summary
-    const totalIncome = monthlyData.reduce((sum, month) => sum + month.income, 0)
-    const totalExpenses = monthlyData.reduce((sum, month) => sum + month.expenses, 0)
-    const currentBalance = totalIncome - totalExpenses
-    const totalProfit = currentBalance
-
-    setSummary({
-      totalIncome,
-      totalExpenses,
-      currentBalance,
-      totalProfit,
-    })
+    load()
   }, [])
 
   return (

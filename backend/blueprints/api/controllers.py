@@ -92,7 +92,7 @@ def create_player():
         raise ValidationError("Dados não fornecidos")
     
     # Validar campos obrigatórios alinhados ao modelo
-    required_fields = ['name', 'phone', 'email', 'position']
+    required_fields = ['name', 'phone', 'position']  # email removido dos obrigatórios
     missing_fields = [field for field in required_fields if not data.get(field)]
     
     if missing_fields:
@@ -104,7 +104,9 @@ def create_player():
     # Normalizar entradas
     name = data['name'].strip() if isinstance(data.get('name'), str) else data['name']
     phone = data['phone'].strip() if isinstance(data.get('phone'), str) else data['phone']
-    email = data['email'].strip().lower() if isinstance(data.get('email'), str) else data['email']
+    email = data.get('email')
+    if email:
+        email = email.strip().lower() if isinstance(email, str) else email
     position = data['position'].strip() if isinstance(data.get('position'), str) else data['position']
     
     # Verificar duplicidade de telefone
@@ -115,23 +117,23 @@ def create_player():
             {'phone': ['Telefone já cadastrado']}
         )
     
-    # Verificar duplicidade de email
-    existing_email = Player.query.filter_by(email=email).first()
-    if existing_email:
-        raise ValidationError(
-            "Já existe um jogador com este email",
-            {'email': ['Email já cadastrado']}
-        )
+    # Verificar duplicidade de email apenas se fornecido
+    if email:
+        existing_email = Player.query.filter_by(email=email).first()
+        if existing_email:
+            raise ValidationError(
+                "Já existe um jogador com este email",
+                {'email': ['Email já cadastrado']}
+            )
     
     # Criar novo jogador
     player = Player(
         id=str(uuid.uuid4()),
         name=name,
         phone=phone,
-        email=email,
+        email=email,  # Pode ser None
         position=position,
-        # Usa taxa mensal informada ou 0.00 por padrão
-        monthly_fee=data.get('monthly_fee', 0.00),
+        # monthly_fee removido - controlado na gestão mensal
         status='active'
     )
     
@@ -987,27 +989,55 @@ def add_players_to_monthly_period(period_id):
     """
     Adiciona jogadores selecionados a um período mensal
     """
+    print(f"[BACKEND] add_players_to_monthly_period - INÍCIO")
+    print(f"[BACKEND] period_id recebido: {period_id}")
+    print(f"[BACKEND] request.method: {request.method}")
+    print(f"[BACKEND] request.headers: {dict(request.headers)}")
+    print(f"[BACKEND] request.json: {request.json}")
+    
     try:
         # Verificar se o período existe
+        print(f"[BACKEND] Verificando se o período {period_id} existe...")
         period = MonthlyPeriod.query.get(period_id)
         if not period:
-            return jsonify({'error': 'Período não encontrado'}), 404
+            print(f"[BACKEND] ERRO: Período {period_id} não encontrado")
+            return APIResponse.error('Período não encontrado', status_code=404)
+        
+        print(f"[BACKEND] Período encontrado: {period.id} - {period.month}/{period.year}")
         
         # Validar dados de entrada
         data = request.json
+        print(f"[BACKEND] Dados recebidos: {data}")
+        
         if not data or 'player_ids' not in data:
-            return jsonify({'error': 'Lista de player_ids é obrigatória'}), 400
+            print(f"[BACKEND] ERRO: Lista de player_ids é obrigatória")
+            return APIResponse.error('Lista de player_ids é obrigatória', status_code=400)
         
         player_ids = data['player_ids']
+        print(f"[BACKEND] player_ids extraídos: {player_ids}")
+        
         if not isinstance(player_ids, list) or len(player_ids) == 0:
-            return jsonify({'error': 'Lista de player_ids deve conter pelo menos um ID'}), 400
+            print(f"[BACKEND] ERRO: Lista de player_ids deve conter pelo menos um ID")
+            return APIResponse.error('Lista de player_ids deve conter pelo menos um ID', status_code=400)
+        
+        print(f"[BACKEND] Validação inicial OK - {len(player_ids)} jogadores para adicionar")
         
         # Buscar jogadores válidos
+        print(f"[BACKEND] Buscando jogadores no banco de dados...")
         players = Player.query.filter(Player.id.in_(player_ids)).all()
+        print(f"[BACKEND] Jogadores encontrados: {len(players)}")
+        
+        for player in players:
+            print(f"[BACKEND] Jogador encontrado: {player.id} - {player.name}")
+        
         if len(players) != len(player_ids):
-            return jsonify({'error': 'Um ou mais jogadores não foram encontrados'}), 400
+            print(f"[BACKEND] ERRO: Nem todos os jogadores foram encontrados")
+            print(f"[BACKEND] IDs solicitados: {player_ids}")
+            print(f"[BACKEND] IDs encontrados: {[p.id for p in players]}")
+            return APIResponse.error('Um ou mais jogadores não foram encontrados', status_code=400)
         
         # Verificar se algum jogador já está no período
+        print(f"[BACKEND] Verificando jogadores já existentes no período...")
         existing_players = MonthlyPlayer.query.filter(
             and_(
                 MonthlyPlayer.monthly_period_id == period_id,
@@ -1015,17 +1045,31 @@ def add_players_to_monthly_period(period_id):
             )
         ).all()
         
+        print(f"[BACKEND] Jogadores já existentes: {len(existing_players)}")
+        
         if existing_players:
             existing_names = [mp.player_name for mp in existing_players]
-            return jsonify({
-                'error': f'Os seguintes jogadores já estão no período: {", ".join(existing_names)}'
-            }), 400
+            print(f"[BACKEND] ERRO: Jogadores já existem: {existing_names}")
+            return APIResponse.error(
+                f'Os seguintes jogadores já estão no período: {", ".join(existing_names)}',
+                status_code=400
+            )
         
         # Criar registros para os jogadores selecionados
+        print(f"[BACKEND] Criando registros para os jogadores...")
         created_players = []
         total_expected_increase = 0
         
         for player in players:
+            print(f"[BACKEND] Processando jogador: {player.id} - {player.name}")
+            
+            # Usar uma taxa padrão se o jogador não tiver monthly_fee
+            from decimal import Decimal
+            default_monthly_fee = Decimal('50.00')  # Taxa padrão como Decimal
+            player_monthly_fee = getattr(player, 'monthly_fee', default_monthly_fee)
+            
+            print(f"[BACKEND] Monthly fee para {player.name}: {player_monthly_fee}")
+            
             monthly_player = MonthlyPlayer(
                 id=str(uuid.uuid4()),
                 monthly_period_id=period_id,
@@ -1034,29 +1078,69 @@ def add_players_to_monthly_period(period_id):
                 position=player.position,
                 phone=player.phone or '',
                 email=player.email or '',
-                monthly_fee=player.monthly_fee,
+                monthly_fee=player_monthly_fee,
                 join_date=player.join_date,
                 status='pending'
             )
+            
+            print(f"[BACKEND] MonthlyPlayer criado: {monthly_player.id}")
             db.session.add(monthly_player)
             created_players.append(monthly_player)
-            total_expected_increase += player.monthly_fee
+            total_expected_increase += player_monthly_fee
+        
+        print(f"[BACKEND] Total de jogadores criados: {len(created_players)}")
+        print(f"[BACKEND] Aumento no total esperado: {total_expected_increase}")
         
         # Atualizar totais do período
+        print(f"[BACKEND] Atualizando totais do período...")
         period.total_expected += total_expected_increase
         period.players_count = MonthlyPlayer.query.filter_by(monthly_period_id=period_id).count() + len(created_players)
         
-        db.session.commit()
+        print(f"[BACKEND] Novo total esperado: {period.total_expected}")
+        print(f"[BACKEND] Nova contagem de jogadores: {period.players_count}")
         
-        return jsonify({
-            'message': f'{len(created_players)} jogadores adicionados com sucesso',
-            'added_players': len(created_players),
-            'total_expected_increase': float(total_expected_increase)
-        }), 201
+        # Commit das alterações
+        print(f"[BACKEND] Fazendo commit das alterações...")
+        db.session.commit()
+        print(f"[BACKEND] Commit realizado com sucesso!")
+
+        # Montar dados de resposta conforme contrato do frontend
+        print(f"[BACKEND] Montando dados de resposta...")
+        response_data = [
+            {
+                'id': mp.id,
+                'player_id': mp.player_id,
+                'monthly_period_id': mp.monthly_period_id,
+                'player_name': mp.player_name,
+                'position': mp.position,
+                'phone': mp.phone,
+                'email': mp.email,
+                'monthly_fee': float(mp.monthly_fee),
+                'custom_monthly_fee': float(mp.custom_monthly_fee) if mp.custom_monthly_fee is not None else None,
+                'join_date': mp.join_date.isoformat() if mp.join_date else None,
+                'status': mp.status,
+                'payment_date': mp.payment_date.isoformat() if mp.payment_date else None,
+                'pending_months_count': mp.pending_months_count if hasattr(mp, 'pending_months_count') else 0,
+                'created_at': mp.created_at.isoformat(),
+                'updated_at': mp.updated_at.isoformat()
+            }
+            for mp in created_players
+        ]
+        
+        print(f"[BACKEND] Resposta final: {len(response_data)} jogadores adicionados")
+        print(f"[BACKEND] Retornando sucesso para o frontend")
+
+        return APIResponse.success(
+            data=response_data,
+            message=f'{len(created_players)} jogadores adicionados com sucesso'
+        )
         
     except Exception as e:
+        print(f"[BACKEND] ERRO CRÍTICO: {str(e)}")
+        print(f"[BACKEND] Fazendo rollback das alterações...")
         db.session.rollback()
-        return jsonify({'error': f'Erro ao adicionar jogadores ao período: {str(e)}'}), 500
+        print(f"[BACKEND] Rollback realizado")
+        return APIResponse.error(f'Erro ao adicionar jogadores ao período: {str(e)}', status_code=500)
 
 
 @api_bp.route('/monthly-periods/<period_id>/players', methods=['GET'])
@@ -1073,46 +1157,80 @@ def get_monthly_period_players(period_id):
             print("[DEBUG][get_monthly_period_players] período não encontrado")
             return jsonify({'error': 'Período não encontrado'}), 404
         
+        print(f"[DEBUG][get_monthly_period_players] período encontrado: {period.name}")
+        
         # Buscar jogadores do período
         monthly_players = MonthlyPlayer.query.filter_by(monthly_period_id=period_id).all()
         print(f"[DEBUG][get_monthly_period_players] jogadores carregados={len(monthly_players)}")
         
         result = []
-        for mp in monthly_players:
-            player_data = {
-                'id': mp.id,
-                'player_id': mp.player_id,
-                'monthly_period_id': mp.monthly_period_id,
-                'player_name': mp.player_name,
-                'position': mp.position,
-                'phone': mp.phone,
-                'email': mp.email,
-                'monthly_fee': float(mp.monthly_fee),
-                'status': mp.status,
-                'payment_date': mp.payment_date.isoformat() if mp.payment_date else None,
-                'created_at': mp.created_at.isoformat(),
-                'updated_at': mp.updated_at.isoformat()
-            }
-            
-            # Incluir dados do jogador se disponível
-            if mp.player:
-                player_data['player'] = {
-                    'id': mp.player.id,
-                    'name': mp.player.name,
-                    'email': mp.player.email,
-                    'phone': mp.player.phone,
-                    'position': mp.player.position,
-                    'monthly_fee': float(mp.player.monthly_fee),
-                    'status': mp.player.status
+        for i, mp in enumerate(monthly_players):
+            try:
+                print(f"[DEBUG][get_monthly_period_players] processando jogador {i+1}: id={mp.id}, player_id={mp.player_id}")
+                
+                # Verificar se join_date existe e é válido
+                join_date_str = None
+                if hasattr(mp, 'join_date') and mp.join_date:
+                    try:
+                        join_date_str = mp.join_date.isoformat()
+                        print(f"[DEBUG][get_monthly_period_players] join_date convertido: {join_date_str}")
+                    except Exception as date_error:
+                        print(f"[ERROR][get_monthly_period_players] erro ao converter join_date: {date_error}")
+                        join_date_str = None
+                else:
+                    print(f"[DEBUG][get_monthly_period_players] join_date é None ou não existe")
+                
+                player_data = {
+                    'id': mp.id,
+                    'player_id': mp.player_id,
+                    'monthly_period_id': mp.monthly_period_id,
+                    'player_name': mp.player_name,
+                    'position': mp.position,
+                    'phone': mp.phone,
+                    'email': mp.email,
+                    'monthly_fee': float(mp.monthly_fee),
+                    'join_date': join_date_str,
+                    'status': mp.status,
+                    'payment_date': mp.payment_date.isoformat() if mp.payment_date else None,
+                    'created_at': mp.created_at.isoformat(),
+                    'updated_at': mp.updated_at.isoformat()
                 }
-            
-            result.append(player_data)
+                
+                print(f"[DEBUG][get_monthly_period_players] dados básicos do jogador montados")
+                
+                # Incluir dados do jogador se disponível
+                if mp.player:
+                    print(f"[DEBUG][get_monthly_period_players] incluindo dados do relacionamento player")
+                    player_data['player'] = {
+                        'id': mp.player.id,
+                        'name': mp.player.name,
+                        'email': mp.player.email,
+                        'phone': mp.player.phone,
+                        'position': mp.player.position,
+                        'monthly_fee': float(mp.monthly_fee),  # Usar monthly_fee do MonthlyPlayer, não do Player
+                        'status': mp.player.status
+                    }
+                else:
+                    print(f"[DEBUG][get_monthly_period_players] relacionamento player é None")
+                
+                result.append(player_data)
+                print(f"[DEBUG][get_monthly_period_players] jogador {i+1} adicionado ao resultado")
+                
+            except Exception as player_error:
+                print(f"[ERROR][get_monthly_period_players] erro ao processar jogador {i+1}: {player_error}")
+                import traceback
+                print(f"[ERROR][get_monthly_period_players] traceback: {traceback.format_exc()}")
+                # Continue com o próximo jogador ao invés de falhar completamente
+                continue
+        
         print(f"[DEBUG][get_monthly_period_players] resposta montada com {len(result)} jogadores")
         
         return jsonify(result), 200
         
     except Exception as e:
-        print(f"[ERROR][get_monthly_period_players] erro ao buscar jogadores: {str(e)}")
+        print(f"[ERROR][get_monthly_period_players] erro geral ao buscar jogadores: {str(e)}")
+        import traceback
+        print(f"[ERROR][get_monthly_period_players] traceback completo: {traceback.format_exc()}")
         return jsonify({'error': f'Erro ao buscar jogadores do período: {str(e)}'}), 500
 
 

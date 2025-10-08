@@ -41,6 +41,13 @@ export const getAdjacentMonths = (month: number, year: number) => {
 }
 import type { MonthlyPlayer, CasualPlayer } from "@/types/monthly"
 
+// Utilitário compartilhado para conversão segura para número
+export const toNum = (v: unknown): number => {
+  if (typeof v === "number") return v
+  const n = Number(v ?? 0)
+  return isNaN(n) ? 0 : n
+}
+
 export interface MonthlyStats {
   received: number
   expected: number
@@ -53,12 +60,6 @@ export const computeMonthlyStats = (
   players: MonthlyPlayer[],
   casuals: CasualPlayer[]
 ): MonthlyStats => {
-  const toNum = (v: unknown): number => {
-    if (typeof v === "number") return v
-    const n = Number(v ?? 0)
-    return isNaN(n) ? 0 : n
-  }
-
   const received =
     players.filter((p) => p.status === "paid").reduce((sum, p) => sum + toNum(p.monthlyFee), 0) +
     casuals.filter((c) => c.status === "paid").reduce((sum, c) => sum + toNum(c.amount), 0)

@@ -4,7 +4,9 @@
  */
 
 // Configuração base da API
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+// Preferimos caminho relativo por padrão para usar rewrites do Next.js em desenvolvimento
+// Em produção, defina NEXT_PUBLIC_API_URL para apontar para o backend externo
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 // Tipos para as respostas padronizadas da API
 export interface StandardApiResponse<T = any> {
@@ -79,6 +81,30 @@ class ApiClient {
   }
 
   /**
+   * Constrói uma URL absoluta a partir de um endpoint que pode ser relativo
+   */
+  private buildUrl(endpoint: string): string {
+    // Se já for uma URL absoluta, retorna diretamente
+    const isAbsolute = /^https?:\/\//i.test(endpoint);
+    if (isAbsolute) return endpoint;
+
+    // Base preferida: this.baseURL quando definida (produção)
+    const base = this.baseURL && this.baseURL.trim().length > 0
+      ? this.baseURL
+      : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
+
+    try {
+      const url = new URL(endpoint, base);
+      return url.toString();
+    } catch (_e) {
+      // Fallback simples por concatenação segura
+      const baseNoSlash = base.endsWith('/') ? base.slice(0, -1) : base;
+      const endpointWithSlash = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      return `${baseNoSlash}${endpointWithSlash}`;
+    }
+  }
+
+  /**
    * Método privado para tratar erros da API com formato padronizado
    */
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -146,7 +172,8 @@ class ApiClient {
    * Método GET genérico com tipagem forte
    */
   async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    const url = new URL(`${this.baseURL}${endpoint}`);
+    const abs = this.buildUrl(endpoint);
+    const url = new URL(abs);
     
     // Adiciona parâmetros de query se existirem
     if (params) {
@@ -180,15 +207,39 @@ class ApiClient {
    * Método POST genérico com tipagem forte
    */
   async post<T>(endpoint: string, data?: any): Promise<T> {
+    console.log('[ApiClient] POST - INÍCIO');
+    console.log('[ApiClient] Endpoint:', endpoint);
+    console.log('[ApiClient] Data:', data);
+    
+    const fullUrl = this.buildUrl(endpoint);
+    console.log('[ApiClient] URL completa:', fullUrl);
+    
+    const headers = this.getHeaders();
+    console.log('[ApiClient] Headers:', headers);
+    
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      console.log('[ApiClient] Iniciando fetch...');
+      const response = await fetch(fullUrl, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: headers,
         body: data ? JSON.stringify(data) : undefined,
       });
 
-      return this.handleResponse<T>(response);
+      console.log('[ApiClient] Resposta recebida:');
+      console.log('[ApiClient] Status:', response.status);
+      console.log('[ApiClient] StatusText:', response.statusText);
+      console.log('[ApiClient] Headers da resposta:', Object.fromEntries(response.headers.entries()));
+      
+      const result = await this.handleResponse<T>(response);
+      console.log('[ApiClient] POST - SUCESSO');
+      console.log('[ApiClient] Resultado final:', result);
+      
+      return result;
     } catch (error) {
+      console.error('[ApiClient] Erro no POST:', error);
+      console.error('[ApiClient] Tipo do erro:', typeof error);
+      console.error('[ApiClient] Stack trace:', error instanceof Error ? error.stack : 'N/A');
+      
       if (error instanceof ApiException) {
         throw error;
       }
@@ -205,7 +256,7 @@ class ApiClient {
    */
   async put<T>(endpoint: string, data?: any): Promise<T> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await fetch(this.buildUrl(endpoint), {
         method: 'PUT',
         headers: this.getHeaders(),
         body: data ? JSON.stringify(data) : undefined,
@@ -229,7 +280,7 @@ class ApiClient {
    */
   async delete<T>(endpoint: string): Promise<T> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await fetch(this.buildUrl(endpoint), {
         method: 'DELETE',
         headers: this.getHeaders(),
       });
@@ -252,7 +303,7 @@ class ApiClient {
    */
   async patch<T>(endpoint: string, data?: any): Promise<T> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await fetch(this.buildUrl(endpoint), {
         method: 'PATCH',
         headers: this.getHeaders(),
         body: data ? JSON.stringify(data) : undefined,

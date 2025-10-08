@@ -33,25 +33,44 @@ export default function PlayersPage() {
   const { toast } = useToast()
 
   // Função para converter Player da API para o tipo local
-  const convertApiPlayerToLocal = (apiPlayer: ApiPlayer): Player => ({
-    id: apiPlayer.id.toString(),
-    name: apiPlayer.name,
-    position: apiPlayer.position,
-    phone: apiPlayer.phone || '',
-    email: apiPlayer.email || '',
-    joinDate: new Date(apiPlayer.created_at).toLocaleDateString("pt-BR"),
-    status: apiPlayer.status === 'active' ? 'active' : 'inactive',
-    monthlyFee: Number(apiPlayer.monthly_fee ?? 0),
-    isActive: apiPlayer.status === 'active',
-  })
+  const convertApiPlayerToLocal = (apiPlayer: ApiPlayer): Player => {
+    // Função auxiliar para converter data de forma segura
+    const formatDate = (dateString: string | null | undefined): string => {
+      if (!dateString) {
+        return 'Data não informada';
+      }
+      
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Data inválida';
+      }
+      
+      return date.toLocaleDateString("pt-BR");
+    };
+
+    return {
+      id: apiPlayer.id.toString(),
+      name: apiPlayer.name,
+      position: apiPlayer.position,
+      phone: apiPlayer.phone || '',
+      email: apiPlayer.email || '',
+      joinDate: formatDate(apiPlayer.join_date),
+      status: apiPlayer.status === 'active' ? 'active' : 'inactive',
+      monthlyFee: Number(apiPlayer.monthly_fee ?? 0),
+      isActive: apiPlayer.status === 'active',
+    };
+  }
 
   // Função para converter PlayerStats da API para o tipo local
-  const convertApiStatsToLocal = (apiStats: ApiPlayerStats): PlayerStats => ({
-    total: apiStats.total_players,
-    active: apiStats.active_players,
-    pending: 0, // Calcular baseado nos dados reais
-    delayed: 0, // Calcular baseado nos dados reais
-    inactive: apiStats.inactive_players,
+  // O backend pode retornar chaves como { total, active, inactive, pending }
+  // ou no formato { total_players, active_players, inactive_players, pending_players }
+  const convertApiStatsToLocal = (apiStats: any): PlayerStats => ({
+    total: apiStats.total ?? apiStats.total_players ?? 0,
+    active: apiStats.active ?? apiStats.active_players ?? 0,
+    pending: apiStats.pending ?? apiStats.pending_players ?? 0,
+    // O backend atual não fornece "delayed"; manter 0 até haver endpoint correspondente
+    delayed: apiStats.delayed ?? apiStats.delayed_players ?? 0,
+    inactive: apiStats.inactive ?? apiStats.inactive_players ?? 0,
   })
 
   // Carrega jogadores da API
@@ -326,7 +345,7 @@ export default function PlayersPage() {
           </div>
         </div>
 
-        <StatsCards stats={stats} onOpenDetails={() => setDetailsOpen(true)} />
+        <StatsCards stats={stats} />
 
         <div className="flex items-center justify-between mb-6">
           <div className="relative flex-1 max-w-md">

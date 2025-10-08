@@ -4,6 +4,7 @@
  */
 
 import { api, StandardApiResponse, ApiException } from '../api';
+import { toNum } from '../monthly-utils';
 import { Expense } from '../../types/api';
 
 export interface CreateExpenseRequest {
@@ -29,9 +30,13 @@ export class ExpensesService {
       const response = await api.get<Expense[]>(`${this.baseEndpoint}/${periodId}/expenses`);
       
       if (Array.isArray(response)) {
+        const normalized = response.map((e) => ({
+          ...e,
+          amount: toNum(e.amount),
+        }));
         return {
           success: true,
-          data: response,
+          data: normalized,
           message: 'Despesas carregadas com sucesso'
         };
       }
@@ -67,7 +72,11 @@ export class ExpensesService {
       );
 
       // O cliente API já retorna a resposta padronizada do backend
-      return response;
+      const normalized: Expense = {
+        ...response.data,
+        amount: toNum(response.data.amount),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;
@@ -105,7 +114,11 @@ export class ExpensesService {
         expenseData
       );
 
-      return response;
+      const normalized: Expense = {
+        ...response.data,
+        amount: toNum(response.data.amount),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;

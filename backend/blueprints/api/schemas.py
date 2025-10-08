@@ -13,12 +13,12 @@ class PlayerCreateSchema(Schema):
     position = fields.Str(required=True, validate=validate.OneOf([
         'goalkeeper', 'defender', 'midfielder', 'forward'
     ]))
-    monthly_fee = fields.Decimal(required=True, validate=validate.Range(min=0))
+    # monthly_fee removido - controlado na gestão mensal
     status = fields.Str(validate=validate.OneOf([
         'active', 'inactive', 'pending', 'suspended'
     ]), missing='active')
-    phone = fields.Str(validate=validate.Length(max=20), allow_none=True)
-    email = fields.Email(allow_none=True)
+    phone = fields.Str(required=True, validate=validate.Length(max=20))
+    email = fields.Email(allow_none=True)  # Opcional
 
 
 class PlayerUpdateSchema(Schema):
@@ -27,12 +27,12 @@ class PlayerUpdateSchema(Schema):
     position = fields.Str(validate=validate.OneOf([
         'goalkeeper', 'defender', 'midfielder', 'forward'
     ]))
-    monthly_fee = fields.Decimal(validate=validate.Range(min=0))
+    # monthly_fee removido - controlado na gestão mensal
     status = fields.Str(validate=validate.OneOf([
         'active', 'inactive', 'pending', 'suspended'
     ]))
-    phone = fields.Str(validate=validate.Length(max=20), allow_none=True)
-    email = fields.Email(allow_none=True)
+    phone = fields.Str(validate=validate.Length(max=20))
+    email = fields.Email(allow_none=True)  # Opcional
 
 
 class PlayerResponseSchema(Schema):
@@ -40,10 +40,11 @@ class PlayerResponseSchema(Schema):
     id = fields.Str()
     name = fields.Str()
     position = fields.Str()
-    monthly_fee = fields.Decimal(as_string=True)
+    # monthly_fee removido - controlado na gestão mensal
     status = fields.Str()
     phone = fields.Str()
-    email = fields.Str()
+    email = fields.Str(allow_none=True)  # Pode ser None
+    join_date = fields.Date()
     created_at = fields.DateTime()
     updated_at = fields.DateTime()
 

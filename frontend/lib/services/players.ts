@@ -4,6 +4,7 @@
  */
 
 import { api, StandardApiResponse, PaginatedApiResponse, ApiException } from '../api';
+import { toNum } from '../monthly-utils';
 import {
   Player,
   CreatePlayerRequest,
@@ -27,8 +28,12 @@ export class PlayersService {
       
       // Valida estrutura da resposta
       this.validatePaginatedResponse(response);
-      
-      return response;
+      // Normaliza campos numéricos
+      const normalized = (response.data || []).map((p) => ({
+        ...p,
+        monthly_fee: toNum(p.monthly_fee),
+      }));
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError('Erro ao buscar jogadores', error);
     }
@@ -48,8 +53,11 @@ export class PlayersService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: Player = {
+        ...response.data,
+        monthly_fee: toNum(response.data.monthly_fee),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar jogador ${id}`, error);
     }
@@ -69,8 +77,11 @@ export class PlayersService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: Player = {
+        ...response.data,
+        monthly_fee: toNum(response.data.monthly_fee),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError('Erro ao criar jogador', error);
     }
@@ -94,8 +105,11 @@ export class PlayersService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: Player = {
+        ...response.data,
+        monthly_fee: toNum(response.data.monthly_fee),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao atualizar jogador ${id}`, error);
     }
@@ -115,8 +129,11 @@ export class PlayersService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: Player = {
+        ...response.data,
+        monthly_fee: toNum(response.data.monthly_fee),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao ativar jogador ${id}`, error);
     }
@@ -136,8 +153,11 @@ export class PlayersService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const normalized: Player = {
+        ...response.data,
+        monthly_fee: toNum(response.data.monthly_fee),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao desativar jogador ${id}`, error);
     }
@@ -178,8 +198,16 @@ export class PlayersService {
       );
       
       this.validateStandardResponse(response);
-      
-      return response;
+      const d = response.data;
+      const normalized: PlayerStats = {
+        total_players: toNum(d.total_players),
+        active_players: toNum(d.active_players),
+        inactive_players: toNum(d.inactive_players),
+        players_by_position: Object.fromEntries(
+          Object.entries(d.players_by_position || {}).map(([k, v]) => [k, toNum(v as number)])
+        ),
+      };
+      return { ...response, data: normalized };
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar estatísticas do jogador ${id}`, error);
     }

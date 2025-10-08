@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Importação de Jogadores</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .log { max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Teste de Importação de Jogadores</h1>
+        
+        <div class="section info">
+            <h3>Status da Conexão</h3>
+            <p id="connection-status">Verificando...</p>
+        </div>
+
+        <div class="section">
+            <h3>Ações de Teste</h3>
+            <button onclick="testAuth()">1. Testar Autenticação</button>
+            <button onclick="testGetPeriods()">2. Listar Períodos</button>
+            <button onclick="testGetPlayers()">3. Listar Jogadores</button>
+            <button onclick="testImportPlayers()">4. Importar Jogadores</button>
+            <button onclick="clearLogs()">Limpar Logs</button>
+        </div>
+
+        <div class="section">
+            <h3>Logs de Debug</h3>
+            <div id="logs" class="log">
+                <p>Aguardando testes...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPeriod = null;
+        let availablePlayers = [];
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            
+            if (type === 'error') {
+                logEntry.style.color = 'red';
+            } else if (type === 'success') {
+                logEntry.style.color = 'green';
+            } else if (type === 'warning') {
+                logEntry.style.color = 'orange';
+            }
+            
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '<p>Logs limpos...</p>';
+        }
+
+        function getToken() {
+            const token = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('futebol_token='))
+                ?.split('=')[1];
+            return token;
+        }
+
+        function getHeaders() {
+            const token = getToken();
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+            
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            return headers;
+        }
+
+        async function testAuth() {
+            log('🔑 Testando autenticação...');
+            
+            const token = getToken();
+            if (!token) {
+                log('❌ Token não encontrado nos cookies!', 'error');
+                log('💡 Faça login primeiro no sistema', 'warning');
+                return;
+            }
+            
+            log(`✅ Token encontrado: ${token.substring(0, 20)}...`, 'success');
+            
+            try {
+                const response = await fetch('/api/monthly-periods', {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+                
+                log(`📡 Status da resposta: ${response.status}`);
+                
+                if (response.ok) {
+                    log('✅ Autenticação funcionando!', 'success');
+                } else {
+                    const errorData = await response.json();
+                    log(`❌ Erro de autenticação: ${JSON.stringify(errorData)}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Erro na requisição: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGetPeriods() {
+            log('📅 Buscando períodos mensais...');
+            
+            try {
+                const response = await fetch('/api/monthly-periods', {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+                
+                log(`📡 Status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Períodos encontrados: ${data.data?.length || 0}`, 'success');
+                    
+                    if (data.data && data.data.length > 0) {
+                        currentPeriod = data.data[0];
+                        log(`📅 Período atual selecionado: ${currentPeriod.name} (ID: ${currentPeriod.id})`, 'success');
+                        log(`📊 Dados do período: ${JSON.stringify(currentPeriod, null, 2)}`);
+                    } else {
+                        log('⚠️ Nenhum período encontrado', 'warning');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    log(`❌ Erro: ${JSON.stringify(errorData)}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Erro: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGetPlayers() {
+            log('👥 Buscando jogadores ativos...');
+            
+            try {
+                const response = await fetch('/api/players?status=active&page=1&per_page=100', {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+                
+                log(`📡 Status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    availablePlayers = data.data || [];
+                    log(`✅ Jogadores encontrados: ${availablePlayers.length}`, 'success');
+                    
+                    if (availablePlayers.length > 0) {
+                        log(`👥 Primeiros jogadores:`);
+                        availablePlayers.slice(0, 3).forEach(player => {
+                            log(`  - ${player.name} (ID: ${player.id}, Posição: ${player.position})`);
+                        });
+                    } else {
+                        log('⚠️ Nenhum jogador ativo encontrado', 'warning');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    log(`❌ Erro: ${JSON.stringify(errorData)}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Erro: ${error.message}`, 'error');
+            }
+        }
+
+        async function testImportPlayers() {
+            log('🎯 Testando importação de jogadores...');
+            
+            if (!currentPeriod) {
+                log('❌ Nenhum período selecionado. Execute "Listar Períodos" primeiro.', 'error');
+                return;
+            }
+            
+            if (availablePlayers.length === 0) {
+                log('❌ Nenhum jogador disponível. Execute "Listar Jogadores" primeiro.', 'error');
+                return;
+            }
+            
+            // Selecionar os primeiros 2 jogadores para teste
+            const playersToImport = availablePlayers.slice(0, 2);
+            const playerIds = playersToImport.map(p => p.id);
+            
+            log(`🎯 Importando jogadores: ${playersToImport.map(p => p.name).join(', ')}`);
+            log(`🎯 IDs: ${JSON.stringify(playerIds)}`);
+            
+            const importData = {
+                player_ids: playerIds
+            };
+            
+            log(`📤 URL: /api/monthly-periods/${currentPeriod.id}/players`);
+            log(`📤 Dados: ${JSON.stringify(importData, null, 2)}`);
+            log(`📤 Headers: ${JSON.stringify(getHeaders(), null, 2)}`);
+            
+            try {
+                const response = await fetch(`/api/monthly-periods/${currentPeriod.id}/players`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(importData)
+                });
+                
+                log(`📡 Status da resposta: ${response.status}`);
+                log(`📡 Headers da resposta: ${JSON.stringify([...response.headers.entries()])}`);
+                
+                const responseData = await response.json();
+                log(`📡 Dados da resposta: ${JSON.stringify(responseData, null, 2)}`);
+                
+                if (response.ok) {
+                    log('🎉 IMPORTAÇÃO REALIZADA COM SUCESSO!', 'success');
+                    log(`✅ Jogadores importados: ${responseData.data?.length || 0}`, 'success');
+                } else {
+                    log(`❌ ERRO NA IMPORTAÇÃO: ${responseData.error || responseData.message}`, 'error');
+                    if (responseData.errors) {
+                        log(`❌ Detalhes: ${JSON.stringify(responseData.errors)}`, 'error');
+                    }
+                }
+            } catch (error) {
+                log(`💥 ERRO CRÍTICO: ${error.message}`, 'error');
+                log(`💥 Stack: ${error.stack}`, 'error');
+            }
+        }
+
+        // Verificar status da conexão ao carregar a página
+        window.onload = function() {
+            const token = getToken();
+            const statusElement = document.getElementById('connection-status');
+            
+            if (token) {
+                statusElement.innerHTML = '✅ Token encontrado - Pronto para testes';
+                statusElement.style.color = 'green';
+            } else {
+                statusElement.innerHTML = '❌ Token não encontrado - Faça login primeiro';
+                statusElement.style.color = 'red';
+            }
+        };
+    </script>
+</body>
+</html>

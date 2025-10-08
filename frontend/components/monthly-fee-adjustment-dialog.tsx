@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,8 +25,14 @@ export function MonthlyFeeAdjustmentDialog({
   playersCount,
   onAdjustFee,
 }: MonthlyFeeAdjustmentDialogProps) {
-  const [newFee, setNewFee] = useState(currentFee.toString())
+  const numericCurrentFee = typeof currentFee === "number" ? currentFee : Number(currentFee) || 0
+  const [newFee, setNewFee] = useState(numericCurrentFee.toString())
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    const nextFee = typeof currentFee === "number" ? currentFee : Number(currentFee) || 0
+    setNewFee(nextFee.toString())
+  }, [currentFee])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,7 +50,7 @@ export function MonthlyFeeAdjustmentDialog({
   }
 
   const feeValue = Number.parseFloat(newFee.replace(",", ".")) || 0
-  const currentTotal = currentFee * playersCount
+  const currentTotal = numericCurrentFee * playersCount
   const newTotal = feeValue * playersCount
   const difference = newTotal - currentTotal
 
@@ -62,7 +68,7 @@ export function MonthlyFeeAdjustmentDialog({
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">Valor Atual</span>
               </div>
-              <div className="text-xl font-bold">R$ {currentFee.toFixed(2)}</div>
+              <div className="text-xl font-bold">R$ {numericCurrentFee.toFixed(2)}</div>
             </Card>
 
             <Card className="p-4">
