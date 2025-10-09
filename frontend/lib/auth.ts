@@ -22,8 +22,13 @@ export interface AuthToken {
 }
 
 // Chaves para armazenar dados
-const AUTH_STORAGE_KEY = 'futebol_auth'
+const AUTH_STORAGE_KEY_PREFIX = 'futebol_auth'
 const TOKEN_STORAGE_KEY = 'futebol_token'
+
+// Função para obter chave de armazenamento específica do usuário
+function getAuthStorageKey(userId: string): string {
+  return `${AUTH_STORAGE_KEY_PREFIX}_${userId}`
+}
 
 // Usuários mock para demonstração
 const MOCK_USERS = [
@@ -136,45 +141,43 @@ export class AuthService {
       return user !== null
     }
     
-    // Fallback para localStorage (compatibilidade)
-    const authData = localStorage.getItem(AUTH_STORAGE_KEY)
-    if (!authData) return false
-
-    try {
-      const { expiresAt } = JSON.parse(authData)
-      return new Date().getTime() < expiresAt
-    } catch {
-      return false
+    // Fallback para localStorage (compatibilidade) - verifica todas as chaves de usuários
+    const allKeys = Object.keys(localStorage)
+    const authKeys = allKeys.filter(key => key.startsWith(AUTH_STORAGE_KEY_PREFIX + '_'))
+    
+    for (const key of authKeys) {
+      try {
+        const authData = localStorage.getItem(key)
+        if (authData) {
+          const { expiresAt } = JSON.parse(authData)
+          if (new Date().getTime() < expiresAt) {
+            return true // Encontrou pelo menos um usuário autenticado válido
+          } else {
+            // Remove dados expirados
+            localStorage.removeItem(key)
+          }
+        }
+      } catch {
+        // Remove dados corrompidos
+        localStorage.removeItem(key)
+      }
     }
+    
+    return false
   }
 
   // Obtém dados do usuário atual
   static getCurrentUser(): User | null {
     if (typeof window === 'undefined') return null
     
-    // Primeiro tenta obter do token JWT
+    // Obter apenas do token JWT - sem fallback para localStorage
     const token = CookieManager.get(TOKEN_STORAGE_KEY)
     if (token) {
       return JWTManager.validateToken(token)
     }
     
-    // Fallback para localStorage
-    const authData = localStorage.getItem(AUTH_STORAGE_KEY)
-    if (!authData) return null
-
-    try {
-      const { user, expiresAt } = JSON.parse(authData)
-      
-      if (new Date().getTime() >= expiresAt) {
-        localStorage.removeItem(AUTH_STORAGE_KEY)
-        return null
-      }
-      
-      return user
-    } catch {
-      localStorage.removeItem(AUTH_STORAGE_KEY)
-      return null
-    }
+    // Se não há token JWT válido, o usuário não está logado
+    return null
   }
 
   // Faz login
@@ -211,12 +214,13 @@ export class AuthService {
       // Armazena token em cookie seguro
       CookieManager.set(TOKEN_STORAGE_KEY, data.access_token, 7)
       
-      // Mantém dados no localStorage para compatibilidade
+      // Mantém dados no localStorage para compatibilidade - usando chave específica do usuário
       const authData = {
         user: user,
         expiresAt: Date.now() + (24 * 60 * 60 * 1000)
       }
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
+      const userAuthKey = getAuthStorageKey(user.id)
+      localStorage.setItem(userAuthKey, JSON.stringify(authData))
       
       return { success: true, user: user };
     } catch (error) {
@@ -269,7 +273,8 @@ export class AuthService {
         user,
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
       }
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
+      const userAuthKey = getAuthStorageKey(user.id)
+      localStorage.setItem(userAuthKey, JSON.stringify(authData))
 
       return { success: true, user }
     } catch (err) {
@@ -283,8 +288,26 @@ export class AuthService {
       // Remove token do cookie
       CookieManager.remove(TOKEN_STORAGE_KEY)
 
-      // Remove dados do localStorage
-      localStorage.removeItem(AUTH_STORAGE_KEY)
+      // Remove dados do localStorage - limpa todas as chaves de autenticação do usuário atual
+      const currentUser = this.getCurrentUser()
+      if (currentUser) {
+        const userAuthKey = getAuthStorageKey(currentUser.id)
+        localStorage.removeItem(userAuthKey)
+      }
+      
+      // Limpa também qualquer chave de autenticação órfã
+      const allKeys = Object.keys(localStorage)
+      const authKeys = allKeys.filter(key => key.startsWith(AUTH_STORAGE_KEY_PREFIX + '_'))
+      authKeys.forEach(key => {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || '{}')
+          if (data.expiresAt && Date.now() > data.expiresAt) {
+            localStorage.removeItem(key)
+          }
+        } catch {
+          localStorage.removeItem(key)
+        }
+      })
 
       // Limpa outros dados relacionados à autenticação
       localStorage.removeItem('futebol_user')
@@ -314,12 +337,13 @@ export class AuthService {
     // Atualiza cookie
     CookieManager.set(TOKEN_STORAGE_KEY, authToken.token, 7)
     
-    // Atualiza localStorage
+    // Atualiza localStorage - usando chave específica do usuário
     const authData = {
       user: updatedUser,
       expiresAt: authToken.expiresAt
     }
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
+    const userAuthKey = getAuthStorageKey(updatedUser.id)
+    localStorage.setItem(userAuthKey, JSON.stringify(authData))
     
     return true
   }

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { MagicThemeToggle } from "@/components/magic-theme-toggle"
-import { useAuth } from "@/lib/auth"
+import { AuthService, useAuth } from "@/lib/auth"
 import { Users, Calendar, DollarSign, Receipt, Home, User, LogOut, Menu, X } from "lucide-react"
 
 const navigation = [
@@ -21,10 +21,34 @@ const navigation = [
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
 
   const handleLogout = () => {
     logout()
+  }
+
+  // Função para obter as iniciais do nome
+  const getInitials = (name: string | undefined | null) => {
+    if (!name || typeof name !== 'string') return 'U'
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
+  // Função para obter o nome de exibição da role
+  const getRoleDisplayName = (role: string | undefined | null) => {
+    if (!role) return 'Usuário'
+    switch (role) {
+      case 'admin':
+        return 'Administrador'
+      case 'user':
+        return 'Usuário'
+      default:
+        return 'Usuário'
+    }
   }
 
   return (
@@ -51,11 +75,11 @@ export function Sidebar() {
           <div className="p-6 border-b">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center text-white font-bold">
-                AD
+                {getInitials(user?.name)}
               </div>
               <div>
-                <p className="font-semibold text-foreground">Admin</p>
-                <p className="text-sm text-muted-foreground">Administrador</p>
+                <p className="font-semibold text-foreground">{user?.name || 'Usuário'}</p>
+                <p className="text-sm text-muted-foreground">{getRoleDisplayName(user?.role)}</p>
               </div>
             </div>
           </div>

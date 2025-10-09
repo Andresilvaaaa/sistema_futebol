@@ -84,11 +84,24 @@ export default function ExpensesPage() {
   }
 
   const loadLocalExpenses = () => {
-    // Fallback para dados locais (mock)
-    const savedExpenses = localStorage.getItem("expenses")
-    if (savedExpenses) {
-      setExpenses(JSON.parse(savedExpenses))
-    } else {
+    // Fallback para dados locais (mock) - usando chave específica do usuário
+    try {
+      const { AuthService } = require("@/lib/auth")
+      const currentUser = AuthService.getCurrentUser()
+      if (!currentUser) {
+        setExpenses([])
+        return
+      }
+      
+      const userExpensesKey = `expenses_${currentUser.id}`
+      const savedExpenses = localStorage.getItem(userExpensesKey)
+      if (savedExpenses) {
+        setExpenses(JSON.parse(savedExpenses))
+      } else {
+        setExpenses([])
+      }
+    } catch (error) {
+      console.warn("Erro ao carregar despesas locais:", error)
       setExpenses([])
     }
   }

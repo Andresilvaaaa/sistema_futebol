@@ -128,7 +128,12 @@ class ApiClient {
         if (typeof window !== 'undefined') {
           // Remove token e dados de auth para evitar loops
           document.cookie = 'futebol_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-          localStorage.removeItem('futebol_auth');
+          
+          // Remove todas as chaves de autenticação específicas de usuários
+          const allKeys = Object.keys(localStorage)
+          const authKeys = allKeys.filter(key => key.startsWith('futebol_auth_'))
+          authKeys.forEach(key => localStorage.removeItem(key))
+          
           // Redireciona para a landing page
           // Usamos location.assign para evitar conflitos com roteamento em páginas protegidas
           window.location.assign('/landing');

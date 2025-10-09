@@ -12,9 +12,11 @@ import { User, Building2, MapPin, Phone, Mail, Calendar, Save } from "lucide-rea
 import { getProfile, saveProfile, getInitials } from "@/lib/profile-storage"
 import type { UserProfile, ProfileFormData } from "@/types/profile"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/lib/auth"
 import AuthGuard from "@/components/auth-guard"
 
 export default function ProfilePage() {
+  const { user } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -33,26 +35,54 @@ export default function ProfilePage() {
     zipCode: "",
   })
 
+  // Função para obter o nome de exibição da role
+  const getRoleDisplayName = (role: string | undefined | null) => {
+    if (!role) return 'Usuário'
+    switch (role) {
+      case 'admin':
+        return 'Administrador'
+      case 'user':
+        return 'Usuário'
+      default:
+        return 'Usuário'
+    }
+  }
+
   useEffect(() => {
     const existingProfile = getProfile()
     if (existingProfile) {
       setProfile(existingProfile)
       setFormData({
-        name: existingProfile.name,
-        email: existingProfile.email,
-        phone: existingProfile.phone,
-        avatar: existingProfile.avatar || "",
-        clubName: existingProfile.clubName,
-        clubLogo: existingProfile.clubLogo || "",
-        address: existingProfile.address,
-        city: existingProfile.city,
-        state: existingProfile.state,
-        zipCode: existingProfile.zipCode,
+        name: existingProfile.name || user?.name || '',
+        email: existingProfile.email || user?.email || '',
+        phone: existingProfile.phone || '',
+        avatar: existingProfile.avatar || '',
+        clubName: existingProfile.clubName || '',
+        clubLogo: existingProfile.clubLogo || '',
+        address: existingProfile.address || '',
+        city: existingProfile.city || '',
+        state: existingProfile.state || '',
+        zipCode: existingProfile.zipCode || ''
       })
+    } else if (user) {
+      // Se não há perfil salvo, usar dados do usuário logado
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        phone: '',
+        avatar: '',
+        clubName: '',
+        clubLogo: '',
+        address: '',
+        city: '',
+        state: '',
+        zipCode: ''
+      })
+      setIsEditing(true)
     } else {
       setIsEditing(true)
     }
-  }, [])
+  }, [user])
 
   const handleInputChange = (field: keyof ProfileFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -134,11 +164,11 @@ export default function ProfilePage() {
                 </AvatarFallback>
               </Avatar>
             </div>
-            <CardTitle className="text-xl">{formData.name || "Administrador"}</CardTitle>
+            <CardTitle className="text-xl">{formData.name || user?.name || "Usuário"}</CardTitle>
             <CardDescription>
               <Badge variant="secondary" className="mt-2">
                 <User className="mr-1 h-3 w-3" />
-                Administrador
+                {getRoleDisplayName(user?.role)}
               </Badge>
             </CardDescription>
           </CardHeader>

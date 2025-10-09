@@ -27,7 +27,15 @@ export default function TestAuthPage() {
         token: token ? token.substring(0, 50) + '...' : null,
         user: currentUser,
         isAuthenticated: isAuth,
-        localStorage: typeof window !== 'undefined' ? localStorage.getItem('futebol_auth') : null,
+        localStorage: typeof window !== 'undefined' ? 
+          JSON.stringify(
+            Object.keys(localStorage)
+              .filter(key => key.startsWith('futebol_auth_'))
+              .reduce((acc, key) => {
+                acc[key] = localStorage.getItem(key)
+                return acc
+              }, {} as Record<string, string | null>)
+          ) : null,
         cookies: typeof window !== 'undefined' ? document.cookie : null
       })
     }
@@ -167,7 +175,7 @@ export default function TestAuthPage() {
               </div>
 
               <div>
-                <Label>LocalStorage (futebol_auth):</Label>
+                <Label>LocalStorage (chaves de autenticação):</Label>
                 <div className="bg-muted p-2 rounded text-sm font-mono max-h-32 overflow-auto">
                   {authInfo?.localStorage || 'Vazio'}
                 </div>
