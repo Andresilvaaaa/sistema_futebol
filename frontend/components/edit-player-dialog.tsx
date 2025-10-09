@@ -108,7 +108,7 @@ export function EditPlayerDialog({ player, open, onOpenChange, onEditPlayer, loa
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              required
+              placeholder="email@exemplo.com (opcional)"
             />
           </div>
 

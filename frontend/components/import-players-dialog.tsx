@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Users, Check, Loader2 } from "lucide-react"
-import { playersService } from "@/lib/services"
+import { playersService, paymentsService } from "@/lib/services"
 import { useToast } from "@/hooks/use-toast"
 
 interface ImportPlayersDialogProps {
@@ -41,34 +41,34 @@ export function ImportPlayersDialog({
     console.log('🔍 [ImportPlayersDialog] Iniciando fetchPlayers...')
     setLoading(true)
     try {
-      // Buscar jogadores ativos da API
-      const response = await playersService.getPlayers({ 
-        status: 'active',
-        page: 1,
-        per_page: 100 // Buscar todos os jogadores ativos
-      })
+      // Buscar jogadores disponíveis para importação (que não estão no período)
+      const response = await paymentsService.getAvailablePlayersForPeriod(monthlyPeriodId)
       
       console.log('🔍 [ImportPlayersDialog] Resposta da API:', response)
       
-      // Converter para o formato esperado pelo componente
-       const formattedPlayers = response.data.map(player => ({
-         id: player.id.toString(),
-         name: player.name,
-         position: player.position,
-         phone: player.phone || '',
-         email: player.email || '',
-         monthlyFee: parseFloat(player.monthly_fee),
-         joinDate: player.join_date
-       }))
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Erro ao buscar jogadores disponíveis')
+      }
       
-      console.log('🔍 [ImportPlayersDialog] Jogadores formatados:', formattedPlayers)
+      // Converter para o formato esperado pelo componente
+      const formattedPlayers = response.data.map(player => ({
+        id: player.id.toString(),
+        name: player.name,
+        position: player.position,
+        phone: player.phone || '',
+        email: player.email || '',
+        monthlyFee: parseFloat(player.monthly_fee?.toString() || '50'),
+        joinDate: player.join_date
+      }))
+      
+      console.log('🔍 [ImportPlayersDialog] Jogadores disponíveis formatados:', formattedPlayers)
       setPlayers(formattedPlayers)
       setSelectedPlayers(new Set())
     } catch (error) {
       console.error('❌ [ImportPlayersDialog] Erro ao buscar jogadores:', error)
       toast({
         title: "Erro",
-        description: "Não foi possível carregar os jogadores. Tente novamente.",
+        description: "Não foi possível carregar os jogadores disponíveis. Tente novamente.",
         variant: "destructive",
       })
     } finally {

@@ -106,7 +106,7 @@ export function AddPlayerDialog({ onAddPlayer, loading = false }: AddPlayerDialo
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              required
+              placeholder="email@exemplo.com (opcional)"
             />
           </div>
 

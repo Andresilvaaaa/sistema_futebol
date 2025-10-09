@@ -27,38 +27,18 @@ export class PaymentsService {
    */
   async getMonthlyPeriods(filters?: { year?: number; month?: number }): Promise<PaginatedApiResponse<MonthlyPeriod>> {
     try {
-      const response = await api.get<MonthlyPeriod[] | PaginatedApiResponse<MonthlyPeriod>>(
+      const response = await api.get<StandardApiResponse<MonthlyPeriod[]>>(
         this.baseEndpoint,
         filters
       );
 
-      // Backend retorna um array simples; adaptamos para o formato paginado esperado
-      if (Array.isArray(response)) {
-        const normalized = response.map((p) => ({
-          ...p,
-          year: toNum(p.year),
-          month: toNum(p.month),
-          total_expected: toNum(p.total_expected),
-          total_received: toNum(p.total_received),
-          players_count: toNum(p.players_count),
-        }));
-        return {
-          success: true,
-          data: normalized,
-          pagination: {
-            page: 1,
-            pages: 1,
-            per_page: normalized.length,
-            total: normalized.length,
-            has_next: false,
-            has_prev: false,
-          },
-        } as PaginatedApiResponse<MonthlyPeriod>;
-      }
-
-      const typedResponse = response as PaginatedApiResponse<MonthlyPeriod>;
-      this.validatePaginatedResponse(typedResponse);
-      const data = (typedResponse.data || []).map((p) => ({
+      // A API agora retorna uma resposta padronizada com {success, data, message}
+      // Adaptamos para o formato paginado esperado pelo frontend
+      const standardResponse = response as StandardApiResponse<MonthlyPeriod[]>;
+      this.validateStandardResponse(standardResponse);
+      
+      const periods = standardResponse.data || [];
+      const normalized = periods.map((p) => ({
         ...p,
         year: toNum(p.year),
         month: toNum(p.month),
@@ -66,7 +46,20 @@ export class PaymentsService {
         total_received: toNum(p.total_received),
         players_count: toNum(p.players_count),
       }));
-      return { ...typedResponse, data };
+
+      return {
+        success: true,
+        data: normalized,
+        message: standardResponse.message,
+        pagination: {
+          page: 1,
+          pages: 1,
+          per_page: normalized.length,
+          total: normalized.length,
+          has_next: false,
+          has_prev: false,
+        },
+      } as PaginatedApiResponse<MonthlyPeriod>;
     } catch (error) {
       throw this.handleServiceError('Erro ao buscar períodos mensais', error);
     }
@@ -208,46 +201,59 @@ export class PaymentsService {
   // === JOGADORES MENSAIS ===
 
   /**
-   * Lista jogadores de um período mensal com filtros
+   * Lista jogadores disponíveis para importação (que não estão no período)
    */
-  async getMonthlyPlayers(periodId: string, filters?: MonthlyPaymentsFilters): Promise<PaginatedApiResponse<MonthlyPlayer>> {
+  async getAvailablePlayersForPeriod(periodId: string): Promise<StandardApiResponse<MonthlyPlayer[]>> {
+    try {
+      const response = await api.get<StandardApiResponse<MonthlyPlayer[]>>(
+        `${this.baseEndpoint}/${periodId}/available-players`
+      );
+
+      // Backend retorna formato padrão: {success: true, data: [...], message: "..."}
+      if (response && typeof response === 'object' && 'success' in response) {
+        this.validateStandardResponse(response);
+        return response;
+      }
+
+      // Fallback para compatibilidade com respostas antigas (array direto)
+      if (Array.isArray(response)) {
+        return {
+          success: true,
+          data: response,
+          message: 'Jogadores disponíveis carregados com sucesso'
+        };
+      }
+
+      throw new ApiException('Resposta inválida da API', 500);
+    } catch (error) {
+      console.error('[PaymentsService] Erro ao buscar jogadores disponíveis:', error);
+      throw this.handleServiceError('Erro ao buscar jogadores disponíveis', error);
+    }
+  }
+
+  /**
+   * Busca jogadores de um período mensal específico
+   */
+  async getMonthlyPlayers(periodId: string): Promise<PaginatedApiResponse<MonthlyPlayer>> {
+    console.log('[PaymentsService] getMonthlyPlayers - INÍCIO');
+    console.log('[PaymentsService] periodId:', periodId);
+    
     if (!periodId?.trim()) {
+      console.error('[PaymentsService] Erro: ID do período é obrigatório');
       throw new ApiException('ID do período é obrigatório', 400);
     }
 
     try {
-      const response = await api.get<MonthlyPlayer[] | PaginatedApiResponse<MonthlyPlayer>>(
-        `/api/monthly-periods/${periodId}/players`,
-        filters
-      );
+      const endpoint = `/api/monthly-periods/${periodId}/players`;
+      console.log('[PaymentsService] Endpoint da API:', endpoint);
+      
+      console.log('[PaymentsService] Chamando api.get...');
+      const response = await api.get<StandardApiResponse<MonthlyPlayer[]>>(endpoint);
+      console.log('[PaymentsService] Resposta da API recebida:', response);
 
-      // Backend retorna array simples; adaptar para paginado
-      if (Array.isArray(response)) {
-        const normalized = response.map((p) => ({
-          ...p,
-          monthly_fee: toNum(p.monthly_fee),
-          custom_monthly_fee: p.custom_monthly_fee !== undefined ? toNum(p.custom_monthly_fee) : undefined,
-          effective_monthly_fee: toNum(p.effective_monthly_fee),
-          amount_paid: toNum(p.amount_paid),
-          pending_months_count: toNum(p.pending_months_count),
-        }));
-        return {
-          success: true,
-          data: normalized,
-          pagination: {
-            page: 1,
-            pages: 1,
-            per_page: normalized.length,
-            total: normalized.length,
-            has_next: false,
-            has_prev: false,
-          },
-        } as PaginatedApiResponse<MonthlyPlayer>;
-      }
-
-      const typedResponse = response as PaginatedApiResponse<MonthlyPlayer>;
-      this.validatePaginatedResponse(typedResponse);
-      const data = (typedResponse.data || []).map((p) => ({
+      // Adaptar resposta padronizada para formato paginado
+      const data = response.data || [];
+      const normalized = data.map((p) => ({
         ...p,
         monthly_fee: toNum(p.monthly_fee),
         custom_monthly_fee: p.custom_monthly_fee !== undefined ? toNum(p.custom_monthly_fee) : undefined,
@@ -255,7 +261,21 @@ export class PaymentsService {
         amount_paid: toNum(p.amount_paid),
         pending_months_count: toNum(p.pending_months_count),
       }));
-      return { ...typedResponse, data };
+
+      return {
+        success: true,
+        message: response.message || 'Jogadores carregados com sucesso',
+        timestamp: response.timestamp,
+        data: normalized,
+        pagination: {
+          page: 1,
+          pages: 1,
+          per_page: normalized.length,
+          total: normalized.length,
+          has_next: false,
+          has_prev: false,
+        },
+      } as PaginatedApiResponse<MonthlyPlayer>;
     } catch (error) {
       throw this.handleServiceError(`Erro ao buscar jogadores do período ${periodId}`, error);
     }

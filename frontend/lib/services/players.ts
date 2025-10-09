@@ -229,7 +229,22 @@ export class PlayersService {
       errors.push('Telefone é obrigatório');
     }
 
-    if (data.monthly_fee !== undefined && (data.monthly_fee < 0 || data.monthly_fee > 9999.99)) {
+    // Validação de email: se fornecido, deve ter formato válido
+    if (data.email && !this.isValidEmail(data.email)) {
+      errors.push('Email deve ter um formato válido');
+    }
+
+    // Validação de telefone: deve ter pelo menos 10 dígitos
+    if (data.phone && data.phone.replace(/\D/g, '').length < 10) {
+      errors.push('Telefone deve ter pelo menos 10 dígitos');
+    }
+
+    // Validação de mensalidade: deve ser positiva
+    if (data.monthly_fee !== undefined && data.monthly_fee < 0) {
+      errors.push('Mensalidade deve ser um valor positivo');
+    }
+
+    if (data.monthly_fee !== undefined && data.monthly_fee > 9999.99) {
       errors.push('Mensalidade deve estar entre 0 e 9999.99');
     }
 
@@ -252,7 +267,22 @@ export class PlayersService {
       errors.push('Telefone não pode estar vazio');
     }
 
-    if (data.monthly_fee !== undefined && (data.monthly_fee < 0 || data.monthly_fee > 9999.99)) {
+    // Validação de email: se fornecido, deve ter formato válido
+    if (data.email !== undefined && data.email && !this.isValidEmail(data.email)) {
+      errors.push('Email deve ter um formato válido');
+    }
+
+    // Validação de telefone: deve ter pelo menos 10 dígitos
+    if (data.phone !== undefined && data.phone && data.phone.replace(/\D/g, '').length < 10) {
+      errors.push('Telefone deve ter pelo menos 10 dígitos');
+    }
+
+    // Validação de mensalidade: deve ser positiva
+    if (data.monthly_fee !== undefined && data.monthly_fee < 0) {
+      errors.push('Mensalidade deve ser um valor positivo');
+    }
+
+    if (data.monthly_fee !== undefined && data.monthly_fee > 9999.99) {
       errors.push('Mensalidade deve estar entre 0 e 9999.99');
     }
 
@@ -325,6 +355,65 @@ export class PlayersService {
       500,
       { originalError: error }
     );
+  }
+
+  /**
+   * Valida formato de email
+   */
+  private isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email.trim());
+  }
+
+  /**
+   * Valida dados de jogador (função genérica para testes)
+   */
+  private validatePlayerData(data: any): void {
+    const errors: string[] = [];
+
+    if (!data.name?.trim()) {
+      errors.push('Nome é obrigatório');
+    }
+
+    // Validação de email: se fornecido, deve ter formato válido
+    if (data.email && !this.isValidEmail(data.email)) {
+      errors.push('Email deve ter um formato válido');
+    }
+
+    // Validação de telefone: deve ter pelo menos 10 dígitos
+    if (data.phone && data.phone.replace(/\D/g, '').length < 10) {
+      errors.push('Telefone deve ter pelo menos 10 dígitos');
+    }
+
+    // Validação de mensalidade: deve ser positiva
+    if (data.monthly_fee !== undefined && data.monthly_fee < 0) {
+      errors.push('Mensalidade deve ser um valor positivo');
+    }
+
+    if (errors.length > 0) {
+      throw new ApiException(errors.join(', '), 400, { errors });
+    }
+  }
+
+  /**
+   * Valida resposta da API (função genérica para testes)
+   */
+  private validateApiResponse(response: any): void {
+    if (!response || typeof response !== 'object') {
+      throw new ApiException('Resposta da API inválida', 500);
+    }
+
+    if (response.success === undefined) {
+      throw new ApiException('Campo success é obrigatório', 500);
+    }
+
+    if (!response.success) {
+      throw new ApiException(
+        response.message || 'Operação falhou',
+        500,
+        response
+      );
+    }
   }
 }
 

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - Página Mensal</title>
+</head>
+<body>
+    <h1>Teste da Página Mensal - Contadores</h1>
+    <div id="results"></div>
+
+    <script>
+        async function testMonthlyPage() {
+            const results = document.getElementById('results');
+            
+            try {
+                console.log('🔍 Testando a página mensal...');
+                
+                // Teste 1: Verificar se o frontend está rodando
+                console.log('📡 Testando conexão com frontend...');
+                const frontendResponse = await fetch('http://localhost:3000/monthly');
+                console.log('Frontend status:', frontendResponse.status);
+                
+                // Teste 2: Verificar se o backend está rodando
+                console.log('📡 Testando conexão com backend...');
+                const backendResponse = await fetch('http://localhost:5000/api/monthly-periods');
+                console.log('Backend status:', backendResponse.status);
+                
+                if (backendResponse.ok) {
+                    const monthlyPeriods = await backendResponse.json();
+                    console.log('📊 Períodos mensais encontrados:', monthlyPeriods);
+                    
+                    results.innerHTML += `<p><strong>Períodos mensais:</strong> ${JSON.stringify(monthlyPeriods, null, 2)}</p>`;
+                }
+                
+                // Teste 3: Verificar estatísticas de pagamento
+                console.log('📊 Testando API de estatísticas...');
+                const statsResponse = await fetch('http://localhost:5000/api/payment-stats');
+                
+                if (statsResponse.ok) {
+                    const stats = await statsResponse.json();
+                    console.log('📈 Estatísticas de pagamento:', stats);
+                    
+                    results.innerHTML += `<p><strong>Estatísticas:</strong> ${JSON.stringify(stats, null, 2)}</p>`;
+                } else {
+                    console.error('❌ Erro ao buscar estatísticas:', statsResponse.status);
+                    results.innerHTML += `<p style="color: red;"><strong>Erro nas estatísticas:</strong> ${statsResponse.status}</p>`;
+                }
+                
+                // Teste 4: Verificar jogadores do mês atual
+                const currentDate = new Date();
+                const currentMonth = currentDate.getMonth() + 1;
+                const currentYear = currentDate.getFullYear();
+                
+                console.log(`📅 Testando jogadores para ${currentMonth}/${currentYear}...`);
+                const playersResponse = await fetch(`http://localhost:5000/api/monthly-periods/${currentYear}/${currentMonth}/players`);
+                
+                if (playersResponse.ok) {
+                    const players = await playersResponse.json();
+                    console.log('👥 Jogadores do mês atual:', players);
+                    
+                    results.innerHTML += `<p><strong>Jogadores (${currentMonth}/${currentYear}):</strong> ${players.length} jogadores</p>`;
+                } else {
+                    console.error('❌ Erro ao buscar jogadores:', playersResponse.status);
+                    results.innerHTML += `<p style="color: red;"><strong>Erro nos jogadores:</strong> ${playersResponse.status}</p>`;
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro geral:', error);
+                results.innerHTML += `<p style="color: red;"><strong>Erro:</strong> ${error.message}</p>`;
+            }
+        }
+        
+        // Executar teste quando a página carregar
+        window.addEventListener('load', testMonthlyPage);
+    </script>
+</body>
+</html>

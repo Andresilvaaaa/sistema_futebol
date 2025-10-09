@@ -1,7 +1,8 @@
 """
 Controladores da API para gerenciamento de jogadores e pagamentos mensais
 """
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, abort
+from werkzeug.exceptions import NotFound
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import and_, extract
@@ -9,8 +10,9 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import uuid
 
-from ...services.db.connection import db
 from ...services.db.models import Player, MonthlyPeriod, MonthlyPlayer, CasualPlayer, Expense, PaymentStatus
+from ...services.db.connection import db
+from ...utils.helpers import calculate_pending_months_count, update_all_pending_counts_for_period
 from .schemas import (
     PlayerCreateSchema, PlayerUpdateSchema, PlayerResponseSchema,
     MonthlyPaymentCreateSchema, MonthlyPaymentResponseSchema,
@@ -490,12 +492,14 @@ def create_monthly_payment():
                 return APIResponse.error('Não há jogadores ativos para criar o período mensal', status_code=400)
 
         # Calcular totais com Decimal para evitar incompatibilidades de tipo
+        # Usar taxa padrão já que monthly_fee foi removido do modelo Player
+        default_monthly_fee = Decimal('50.00')
         total_expected = Decimal('0')
         for player in active_players or []:
-            fee = player.monthly_fee
+            fee = getattr(player, 'monthly_fee', default_monthly_fee)
             try:
                 if fee is None:
-                    fee_decimal = Decimal('0')
+                    fee_decimal = default_monthly_fee
                 elif isinstance(fee, Decimal):
                     fee_decimal = fee
                 elif isinstance(fee, (float, int)):
@@ -503,7 +507,7 @@ def create_monthly_payment():
                 else:
                     fee_decimal = Decimal(str(fee))
             except (InvalidOperation, ValueError, TypeError):
-                fee_decimal = Decimal('0')
+                fee_decimal = default_monthly_fee
             total_expected += fee_decimal
         logging.info(f"[MonthlyPeriod] Computed total_expected: {str(total_expected)}")
         print(f"[DEBUG][create_monthly_payment] total_expected computado={str(total_expected)}")
@@ -527,6 +531,7 @@ def create_monthly_payment():
 
         # Criar registros MonthlyPlayer para todos os jogadores ativos
         monthly_players_created = 0
+        default_monthly_fee = Decimal('50.00')  # Taxa padrão
         for player in active_players or []:
             # Sanitizar e tipar corretamente os campos
             player_name = player.name or ''
@@ -534,11 +539,11 @@ def create_monthly_payment():
             phone = player.phone or ''
             email = player.email or ''
 
-            # Garantir Decimal em monthly_fee
-            fee = player.monthly_fee
+            # Garantir Decimal em monthly_fee usando taxa padrão
+            fee = getattr(player, 'monthly_fee', default_monthly_fee)
             try:
                 if fee is None:
-                    fee_decimal = Decimal('0')
+                    fee_decimal = default_monthly_fee
                 elif isinstance(fee, Decimal):
                     fee_decimal = fee
                 elif isinstance(fee, (float, int)):
@@ -546,7 +551,7 @@ def create_monthly_payment():
                 else:
                     fee_decimal = Decimal(str(fee))
             except (InvalidOperation, ValueError, TypeError):
-                fee_decimal = Decimal('0')
+                fee_decimal = default_monthly_fee
 
             # Garantir data válida
             join_date = player.join_date or datetime.utcnow().date()
@@ -718,6 +723,11 @@ def update_monthly_player_payment(period_id, player_id):
     else:
         monthly_player.payment_date = None
 
+    # Calcular e atualizar contador de pendências acumuladas para todos os jogadores do período
+    # quando há mudança de status de pagamento
+    update_all_pending_counts_for_period(period_id)
+    print(f"[DEBUG][update_monthly_player_payment] pending_months_count atualizado para todos os jogadores do período")
+
     # Recalcular total_received do período considerando taxa efetiva e avulsos pagos
     period = monthly_player.monthly_period
     total_monthly_received = db.session.query(
@@ -778,96 +788,67 @@ def get_player_stats():
 
 @api_bp.route('/stats/payments/<int:year>/<int:month>', methods=['GET'])
 @jwt_required()
+@handle_api_error
 def get_payment_stats(year, month):
     """
     Retorna estatísticas de pagamentos para um mês específico
     """
-    try:
-        print(f"[DEBUG][get_payment_stats] Iniciando busca de stats para {month}/{year}")
-        # Buscar período
-        period = MonthlyPeriod.query.filter(
-            and_(
-                MonthlyPeriod.year == year,
-                MonthlyPeriod.month == month
-            )
-        ).first()
-        print(f"[DEBUG][get_payment_stats] período encontrado={getattr(period, 'id', None)}")
-        
-        if not period:
-            print("[DEBUG][get_payment_stats] período não encontrado")
-            return jsonify({'error': 'Período não encontrado'}), 404
-        
-        # Calcular estatísticas
-        payments = MonthlyPlayer.query.filter_by(monthly_period_id=period.id).all()
-        print(f"[DEBUG][get_payment_stats] pagamentos carregados={len(payments)}")
-        
-        stats = {
-            'total_players': len(payments),
-            'paid': len([p for p in payments if p.status == 'paid']),
-            'partial': len([p for p in payments if p.status == 'partial']),
-            'pending': len([p for p in payments if p.status == 'pending']),
-            'total_expected': period.total_expected,
-            'total_received': period.total_received,
-            'collection_rate': (period.total_received / period.total_expected * 100) if period.total_expected > 0 else 0
-        }
-        print(f"[DEBUG][get_payment_stats] stats calculadas={stats}")
-        
-        return jsonify(stats), 200
-        
-    except Exception as e:
-        print(f"[ERROR][get_payment_stats] erro ao buscar estatísticas: {str(e)}")
-        return jsonify({'error': f'Erro ao buscar estatísticas de pagamento: {str(e)}'}), 500
+    print(f"[DEBUG][get_payment_stats] Iniciando busca de stats para {month}/{year}")
+    # Buscar período
+    period = MonthlyPeriod.query.filter(
+        and_(
+            MonthlyPeriod.year == year,
+            MonthlyPeriod.month == month
+        )
+    ).first()
+    print(f"[DEBUG][get_payment_stats] período encontrado={getattr(period, 'id', None)}")
+    
+    if not period:
+        print("[DEBUG][get_payment_stats] período não encontrado")
+        raise APIError('Período não encontrado', 404)
+    
+    # Calcular estatísticas
+    payments = MonthlyPlayer.query.filter_by(monthly_period_id=period.id).all()
+    print(f"[DEBUG][get_payment_stats] pagamentos carregados={len(payments)}")
+    
+    paid_count = len([p for p in payments if p.status == 'paid'])
+    partial_count = len([p for p in payments if p.status == 'partial'])
+    pending_count = len([p for p in payments if p.status == 'pending'])
+    
+    stats = {
+        'year': year,
+        'month': month,
+        'total_players': len(payments),
+        'paid_players': paid_count,
+        'pending_players': pending_count + partial_count,  # Pending + partial são considerados pendentes
+        'total_amount_expected': float(period.total_expected),
+        'total_amount_received': float(period.total_received),
+        'payment_rate': float((period.total_received / period.total_expected * 100) if period.total_expected > 0 else 0)
+    }
+    print(f"[DEBUG][get_payment_stats] stats calculadas={stats}")
+    
+    return APIResponse.success(
+        data=stats,
+        message="Estatísticas de pagamento obtidas com sucesso"
+    )
 
 
 # ==================== MONTHLY PERIODS ROUTES ====================
 
 @api_bp.route('/monthly-periods', methods=['GET'])
 @jwt_required()
+@handle_api_error
 def get_monthly_periods():
     """
     Lista todos os períodos mensais
     """
-    try:
-        print("[DEBUG][get_monthly_periods] Iniciando listagem de períodos")
-        periods = MonthlyPeriod.query.order_by(MonthlyPeriod.year.desc(), MonthlyPeriod.month.desc()).all()
-        print(f"[DEBUG][get_monthly_periods] períodos carregados={len(periods)}")
-        
-        result = []
-        for period in periods:
-            result.append({
-                'id': period.id,
-                'month': period.month,
-                'year': period.year,
-                'name': period.name,
-                'is_active': period.is_active,
-                'total_expected': float(period.total_expected),
-                'total_received': float(period.total_received),
-                'players_count': period.players_count,
-                'created_at': period.created_at.isoformat(),
-                'updated_at': period.updated_at.isoformat()
-            })
-        print(f"[DEBUG][get_monthly_periods] resposta montada com {len(result)} períodos")
-        
-        return jsonify(result), 200
-        
-    except Exception as e:
-        print(f"[ERROR][get_monthly_periods] erro ao buscar períodos: {str(e)}")
-        return jsonify({'error': f'Erro ao buscar períodos: {str(e)}'}), 500
-
-
-@api_bp.route('/monthly-periods/<period_id>', methods=['GET'])
-@jwt_required()
-def get_monthly_period(period_id):
-    """
-    Busca um período mensal específico
-    """
-    try:
-        period = MonthlyPeriod.query.get(period_id)
-        
-        if not period:
-            return jsonify({'error': 'Período não encontrado'}), 404
-        
-        result = {
+    print("[DEBUG][get_monthly_periods] Iniciando listagem de períodos")
+    periods = MonthlyPeriod.query.order_by(MonthlyPeriod.year.desc(), MonthlyPeriod.month.desc()).all()
+    print(f"[DEBUG][get_monthly_periods] períodos carregados={len(periods)}")
+    
+    result = []
+    for period in periods:
+        result.append({
             'id': period.id,
             'month': period.month,
             'year': period.year,
@@ -878,12 +859,41 @@ def get_monthly_period(period_id):
             'players_count': period.players_count,
             'created_at': period.created_at.isoformat(),
             'updated_at': period.updated_at.isoformat()
-        }
-        
-        return jsonify(result), 200
-        
-    except Exception as e:
-        return jsonify({'error': f'Erro ao buscar período: {str(e)}'}), 500
+        })
+    print(f"[DEBUG][get_monthly_periods] resposta montada com {len(result)} períodos")
+    
+    return APIResponse.success(
+        data=result,
+        message=f"{len(result)} períodos encontrados"
+    )
+
+
+@api_bp.route('/monthly-periods/<period_id>', methods=['GET'])
+@jwt_required()
+@handle_api_error
+def get_monthly_period(period_id):
+    """
+    Busca um período mensal específico
+    """
+    period = MonthlyPeriod.query.get_or_404(period_id)
+    
+    result = {
+        'id': period.id,
+        'month': period.month,
+        'year': period.year,
+        'name': period.name,
+        'is_active': period.is_active,
+        'total_expected': float(period.total_expected),
+        'total_received': float(period.total_received),
+        'players_count': period.players_count,
+        'created_at': period.created_at.isoformat(),
+        'updated_at': period.updated_at.isoformat()
+    }
+    
+    return APIResponse.success(
+        data=result,
+        message="Período encontrado"
+    )
 
 
 @api_bp.route('/monthly-periods/<period_id>', methods=['PUT'])
@@ -913,7 +923,9 @@ def update_monthly_period(period_id):
     print(f"[DEBUG][update_monthly_period] period_id={period_id}")
 
     # Garantir existência do período
-    period = MonthlyPeriod.query.get_or_404(period_id)
+    period = MonthlyPeriod.query.get(period_id)
+    if not period:
+        return APIResponse.error('Período mensal não encontrado', 404)
 
     # Validar payload com schema
     schema = MonthlyPeriodUpdateSchema()
@@ -1143,8 +1155,58 @@ def add_players_to_monthly_period(period_id):
         return APIResponse.error(f'Erro ao adicionar jogadores ao período: {str(e)}', status_code=500)
 
 
+@api_bp.route('/monthly-periods/<period_id>/available-players', methods=['GET'])
+@jwt_required()
+def get_available_players_for_period(period_id):
+    """
+    Lista jogadores ativos que ainda não estão no período mensal (disponíveis para importação)
+    """
+    try:
+        print(f"[DEBUG][get_available_players_for_period] Iniciando busca para period_id={period_id}")
+        
+        # Verificar se o período existe
+        period = MonthlyPeriod.query.get(period_id)
+        if not period:
+            print("[DEBUG][get_available_players_for_period] período não encontrado")
+            return APIResponse.error('Período não encontrado', status_code=404)
+        
+        print(f"[DEBUG][get_available_players_for_period] período encontrado: {period.name}")
+        
+        # Buscar IDs dos jogadores já no período
+        existing_player_ids = db.session.query(MonthlyPlayer.player_id).filter_by(
+            monthly_period_id=period_id
+        ).all()
+        existing_ids = [row[0] for row in existing_player_ids]
+        print(f"[DEBUG][get_available_players_for_period] jogadores já no período: {len(existing_ids)}")
+        
+        # Buscar jogadores ativos que NÃO estão no período
+        available_players_query = Player.query.filter(
+            Player.is_active == True
+        )
+        
+        if existing_ids:
+            available_players_query = available_players_query.filter(
+                ~Player.id.in_(existing_ids)
+            )
+        
+        available_players = available_players_query.all()
+        print(f"[DEBUG][get_available_players_for_period] jogadores disponíveis: {len(available_players)}")
+        
+        # Serializar jogadores disponíveis
+        schema = PlayerResponseSchema(many=True)
+        result = schema.dump(available_players)
+        
+        print(f"[DEBUG][get_available_players_for_period] retornando {len(result)} jogadores")
+        return APIResponse.success(result)
+        
+    except Exception as e:
+        print(f"[ERROR][get_available_players_for_period] erro: {str(e)}")
+        return APIResponse.error(f'Erro ao buscar jogadores disponíveis: {str(e)}', status_code=500)
+
+
 @api_bp.route('/monthly-periods/<period_id>/players', methods=['GET'])
 @jwt_required()
+@handle_api_error
 def get_monthly_period_players(period_id):
     """
     Lista jogadores de um período mensal específico
@@ -1154,8 +1216,7 @@ def get_monthly_period_players(period_id):
         # Verificar se o período existe
         period = MonthlyPeriod.query.get(period_id)
         if not period:
-            print("[DEBUG][get_monthly_period_players] período não encontrado")
-            return jsonify({'error': 'Período não encontrado'}), 404
+            return APIResponse.error("Período mensal não encontrado", status_code=404)
         
         print(f"[DEBUG][get_monthly_period_players] período encontrado: {period.name}")
         
@@ -1225,13 +1286,16 @@ def get_monthly_period_players(period_id):
         
         print(f"[DEBUG][get_monthly_period_players] resposta montada com {len(result)} jogadores")
         
-        return jsonify(result), 200
+        return APIResponse.success(
+            data=result,
+            message=f"{len(result)} jogadores encontrados no período {period.name}"
+        )
         
     except Exception as e:
         print(f"[ERROR][get_monthly_period_players] erro geral ao buscar jogadores: {str(e)}")
         import traceback
         print(f"[ERROR][get_monthly_period_players] traceback completo: {traceback.format_exc()}")
-        return jsonify({'error': f'Erro ao buscar jogadores do período: {str(e)}'}), 500
+        return APIResponse.error(f'Erro ao buscar jogadores do período: {str(e)}', status_code=500)
 
 
 @api_bp.route('/monthly-periods/<period_id>/casual-players', methods=['GET'])
@@ -1475,6 +1539,53 @@ def delete_casual_player(period_id, casual_player_id):
         db.session.rollback()
         print(f"[ERROR][delete_casual_player] erro ao remover jogador casual: {str(e)}")
         return APIResponse.error(f'Erro ao remover jogador avulso: {str(e)}', 500)
+
+
+@api_bp.route('/monthly-periods/<period_id>/players/<player_id>', methods=['DELETE'])
+@jwt_required()
+@handle_api_error
+def remove_player_from_monthly_period(period_id, player_id):
+    """
+    Remove um jogador de um período mensal específico
+    """
+    try:
+        print(f"[DEBUG][remove_player_from_monthly_period] Iniciando remoção period_id={period_id}, player_id={player_id}")
+        
+        # Verificar se o período existe
+        period = MonthlyPeriod.query.get(period_id)
+        if not period:
+            print("[DEBUG][remove_player_from_monthly_period] período não encontrado")
+            return APIResponse.error('Período não encontrado', 404)
+        
+        # Buscar jogador mensal
+        monthly_player = MonthlyPlayer.query.filter_by(
+            id=player_id,
+            monthly_period_id=period_id
+        ).first()
+        
+        if not monthly_player:
+            print("[DEBUG][remove_player_from_monthly_period] jogador mensal não encontrado")
+            return APIResponse.error('Jogador não encontrado neste período', 404)
+        
+        # Armazenar dados para resposta
+        player_name = monthly_player.player_name
+        
+        # Remover jogador mensal
+        db.session.delete(monthly_player)
+        db.session.commit()
+        
+        print(f"[DEBUG][remove_player_from_monthly_period] jogador mensal removido: {player_name}")
+        
+        return APIResponse.success(
+            None, 
+            f'Jogador "{player_name}" removido do período com sucesso', 
+            200
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR][remove_player_from_monthly_period] erro ao remover jogador mensal: {str(e)}")
+        return APIResponse.error(f'Erro ao remover jogador do período: {str(e)}', 500)
 
 
 @api_bp.route('/monthly-periods/<period_id>/expenses', methods=['GET'])

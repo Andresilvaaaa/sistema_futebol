@@ -405,10 +405,22 @@ export default function MonthlyPage() {
 
   const handleRemoveFromMonth = async (playerId: string, playerName: string) => {
     try {
-      // TODO: Implementar remoção via API
-      // await PaymentsService.removePlayerFromMonth(playerId, currentPeriod.id)
+      // Obter o período atual
+      const currentPeriod = monthlyPeriods.find(p => p.month === currentMonth && p.year === currentYear)
       
-      // Por enquanto, apenas atualizar o estado local
+      if (!currentPeriod) {
+        toast({
+          title: "Erro",
+          description: "Período mensal não encontrado",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Remover jogador via API
+      await paymentsService.removePlayerFromMonthlyPeriod(currentPeriod.id, playerId)
+      
+      // Atualizar o estado local após sucesso da API
       const updatedPlayers = monthlyPlayers.filter((p) => p.id !== playerId)
       setMonthlyPlayers(updatedPlayers)
 
@@ -595,38 +607,15 @@ export default function MonthlyPage() {
         return
       }
 
-      await paymentsService.updateMonthlyPeriod(currentPeriod.id, { monthly_fee: newFee })
+      // Atualizar via API e obter dados atualizados
+      const response = await paymentsService.updateMonthlyPeriod(currentPeriod.id, { monthly_fee: newFee })
+      const updatedPeriodData = response.data
       
-      // Atualizar localmente após sucesso
-      const updatedPlayers = monthlyPlayers.map((player) => {
-        if (currentPeriod && player.monthlyPeriodId === currentPeriod.id) {
-          return {
-            ...player,
-            monthlyFee: newFee,
-          }
-        }
-        return player
-      })
-
-      setMonthlyPlayers(updatedPlayers)
-
-      if (currentPeriod) {
-        const periodPlayers = updatedPlayers.filter((p) => p.monthlyPeriodId === currentPeriod.id)
-        const totalExpected = periodPlayers.reduce((sum, p) => sum + p.monthlyFee, 0)
-        const totalReceived = periodPlayers.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.monthlyFee, 0)
-
-        const updatedPeriod = {
-          ...currentPeriod,
-          totalExpected,
-          totalReceived,
-        }
-
-        const updatedPeriods = monthlyPeriods.map((p) => (p.id === currentPeriod.id ? updatedPeriod : p))
-        setMonthlyPeriods(updatedPeriods)
-      }
-
-      // Atualizar estatísticas agregadas do mês
-      await refreshPaymentStats()
+      // Recarregar dados do servidor para garantir consistência
+      await Promise.all([
+        loadMonthlyData(),
+        refreshPaymentStats()
+      ])
 
       toast({
         title: "Mensalidade reajustada",
@@ -667,7 +656,7 @@ export default function MonthlyPage() {
                   <span className="text-sm text-muted-foreground">Recebido</span>
                 </div>
                 <div className="text-2xl font-bold text-green-600">
-                  R$ <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{formatBRL(paymentStats?.total_amount_received ?? stats.received)}</span>
+                  R$ <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{formatBRL(stats.received)}</span>
                 </div>
               </Card>
 
@@ -676,7 +665,7 @@ export default function MonthlyPage() {
                   <TrendingUp className="h-4 w-4 text-blue-500" />
                   <span className="text-sm text-muted-foreground">Esperado</span>
                 </div>
-                <div className="text-2xl font-bold text-blue-600">R$ {formatBRL(paymentStats?.total_amount_expected ?? stats.expected)}</div>
+                <div className="text-2xl font-bold text-blue-600">R$ {formatBRL(stats.expected)}</div>
               </Card>
 
               <Card className="p-3">
@@ -685,7 +674,7 @@ export default function MonthlyPage() {
                   <span className="text-sm text-muted-foreground">Pendentes</span>
                 </div>
                 <div className="text-2xl font-bold">
-                  <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{paymentStats?.pending_players ?? stats.pending}</span>
+                  <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{stats.pending}</span>
                 </div>
               </Card>
 
@@ -695,7 +684,7 @@ export default function MonthlyPage() {
                   <span className="text-sm text-muted-foreground">Pagaram</span>
                 </div>
                 <div className="text-2xl font-bold text-emerald-600">
-                  <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{paymentStats?.paid_players ?? stats.paid}</span>
+                  <span className={pulseMonthlyStats ? "animate-pulse" : ""}>{stats.paid}</span>
                 </div>
               </Card>
 
@@ -791,7 +780,7 @@ export default function MonthlyPage() {
                             <PaymentStatusDropdown
                               currentStatus={player.status}
                               pendingMonthsCount={
-                                player.status === "pending" ? calculatePendingMonths(player.playerId) : undefined
+                                player.status === "pending" ? player.pendingMonthsCount : undefined
                               }
                               updating={updatingMonthlyId === player.id}
                             />
