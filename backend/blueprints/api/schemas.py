@@ -13,12 +13,12 @@ class PlayerCreateSchema(Schema):
     position = fields.Str(required=True, validate=validate.OneOf([
         'goalkeeper', 'defender', 'midfielder', 'forward'
     ]))
-    # monthly_fee removido - controlado na gestão mensal
+    monthly_fee = fields.Decimal(required=True, validate=validate.Range(min=0))
     status = fields.Str(validate=validate.OneOf([
         'active', 'inactive', 'pending', 'suspended'
     ]), missing='active')
-    phone = fields.Str(required=True, validate=validate.Length(max=20))
-    email = fields.Email(allow_none=True)  # Opcional
+    phone = fields.Str(validate=validate.Length(max=20), allow_none=True)
+    email = fields.Email(allow_none=True)
 
 
 class PlayerUpdateSchema(Schema):
@@ -27,12 +27,12 @@ class PlayerUpdateSchema(Schema):
     position = fields.Str(validate=validate.OneOf([
         'goalkeeper', 'defender', 'midfielder', 'forward'
     ]))
-    # monthly_fee removido - controlado na gestão mensal
+    monthly_fee = fields.Decimal(validate=validate.Range(min=0))
     status = fields.Str(validate=validate.OneOf([
         'active', 'inactive', 'pending', 'suspended'
     ]))
-    phone = fields.Str(validate=validate.Length(max=20))
-    email = fields.Email(allow_none=True)  # Opcional
+    phone = fields.Str(validate=validate.Length(max=20), allow_none=True)
+    email = fields.Email(allow_none=True)
 
 
 class PlayerResponseSchema(Schema):
@@ -40,11 +40,10 @@ class PlayerResponseSchema(Schema):
     id = fields.Str()
     name = fields.Str()
     position = fields.Str()
-    # monthly_fee removido - controlado na gestão mensal
+    monthly_fee = fields.Decimal(as_string=True)
     status = fields.Str()
     phone = fields.Str()
-    email = fields.Str(allow_none=True)  # Pode ser None
-    join_date = fields.Date()
+    email = fields.Str()
     created_at = fields.DateTime()
     updated_at = fields.DateTime()
 
@@ -59,8 +58,8 @@ class MonthlyPaymentCreateSchema(Schema):
     @validates('year')
     def validate_year(self, value):
         current_year = datetime.now().year
-        if value < 2020 or value > 2030:
-            raise ValidationError(f'Ano deve estar entre 2020 e 2030')
+        if value < 2020 or value > current_year + 1:
+            raise ValidationError(f'Ano deve estar entre 2020 e {current_year + 1}')
     
     @validates('month')
     def validate_month(self, value):
@@ -109,13 +108,10 @@ class MonthlyPaymentResponseSchema(Schema):
 
 class CasualPlayerCreateSchema(Schema):
     """Schema para criação de jogadores casuais"""
-    player_name = fields.Str(required=True, validate=validate.Length(min=2, max=100))
-    play_date = fields.Date(required=True)
-    invited_by = fields.Str(required=True, validate=validate.Length(min=1, max=100))
-    amount = fields.Decimal(required=True, validate=validate.Range(min=0))
-    status = fields.Str(validate=validate.OneOf([
-        'pending', 'paid'
-    ]), missing='pending')
+    name = fields.Str(required=True, validate=validate.Length(min=2, max=100))
+    phone = fields.Str(validate=validate.Length(max=20), allow_none=True)
+    email = fields.Email(allow_none=True)
+    notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
 
 
 class CasualPlayerResponseSchema(Schema):
@@ -141,16 +137,15 @@ class ExpenseCreateSchema(Schema):
         'equipment', 'field_rental', 'referee', 'transportation', 
         'food', 'medical', 'maintenance', 'other'
     ]))
-    expense_date = fields.Date(required=True)  # Mudado de DateTime para Date
+    expense_date = fields.DateTime(required=True)
     paid_by = fields.Str(validate=validate.Length(max=100), allow_none=True)
     receipt_url = fields.Url(allow_none=True)
     notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
     
     @validates('expense_date')
     def validate_expense_date(self, value):
-        # Removendo validação de data futura para permitir previsão de gastos
-        # Usuários podem criar despesas futuras para planejamento financeiro
-        pass
+        if value > datetime.now():
+            raise ValidationError('Data da despesa não pode ser no futuro')
 
 
 class ExpenseUpdateSchema(Schema):
@@ -161,16 +156,15 @@ class ExpenseUpdateSchema(Schema):
         'equipment', 'field_rental', 'referee', 'transportation', 
         'food', 'medical', 'maintenance', 'other'
     ]))
-    expense_date = fields.Date()  # Mudado de DateTime para Date
+    expense_date = fields.DateTime()
     paid_by = fields.Str(validate=validate.Length(max=100), allow_none=True)
     receipt_url = fields.Url(allow_none=True)
     notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
     
     @validates('expense_date')
     def validate_expense_date(self, value):
-        # Removendo validação de data futura para permitir previsão de gastos
-        # Usuários podem editar despesas futuras para planejamento financeiro
-        pass
+        if value and value > datetime.now():
+            raise ValidationError('Data da despesa não pode ser no futuro')
 
 
 class ExpenseResponseSchema(Schema):
@@ -242,13 +236,6 @@ class PaymentFilterSchema(Schema):
     ]))
     page = fields.Int(validate=validate.Range(min=1), missing=1)
     per_page = fields.Int(validate=validate.Range(min=1, max=100), missing=20)
-
-# ==================== SCHEMA DE ATUALIZAÇÃO DE PERÍODO MENSAL ====================
-
-class MonthlyPeriodUpdateSchema(Schema):
-    """Schema para atualização de período mensal"""
-    monthly_fee = fields.Decimal(validate=validate.Range(min=0))
-    status = fields.Str(validate=validate.OneOf(['active', 'closed']))
 
 
 class ExpenseFilterSchema(Schema):
