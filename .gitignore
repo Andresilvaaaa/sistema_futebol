@@ -1,0 +1,10 @@
+# Cache e compilados Python
+__pycache__/
+*.pyc
+
+# Banco local
+backend/instance/futebol_dev.db
+
+# Ambiente virtual
+venv/
+.env/
