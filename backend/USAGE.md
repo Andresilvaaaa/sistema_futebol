@@ -181,3 +181,11 @@ pip install -r requirements.txt
 3. **Implementar autenticação real** com hash de senhas
 4. **Adicionar testes unitários**
 5. **Configurar CI/CD**
+
+## 🛠️ Migrations
+
+- As migrations canônicas ficam na pasta `migrations/` na raiz do projeto.
+- A pasta `backend/migrations` é legada e não deve ser usada.
+- Execute `flask db init`, `flask db migrate` e `flask db upgrade` no diretório raiz.
+- Se houver erro por tabelas temporárias `_alembic_tmp_*` no SQLite, rode `python scripts/cleanup_alembic_tmp.py` e tente novamente.
+- A coluna `custom_monthly_fee` existe em `monthly_players` e é `nullable`.
