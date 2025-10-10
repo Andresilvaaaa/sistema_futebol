@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from backend.services.db.connection import db
 from backend.services.db.models import User
+from sqlalchemy import func, or_
 
 # Configurar logger específico para autenticação
 auth_logger = logging.getLogger('auth')
@@ -28,8 +29,8 @@ def login():
     
     data = request.get_json() or {}
     # Aceitar tanto 'username' quanto 'email' para compatibilidade com frontend
-    username = data.get('username')
-    email = data.get('email')
+    username = (data.get('username') or '').strip()
+    email = (data.get('email') or '').strip()
     password = data.get('password')
 
     # Log da tentativa de login
@@ -50,11 +51,13 @@ def login():
     if not email and username and '@' in str(username):
         email = username
 
-    # Buscar usuário por email (preferência) ou username
+    # Buscar usuário por email (preferência) ou username, ambos de forma case-insensitive
     if email:
-        user = db.session.query(User).filter_by(email=email.lower()).first()
+        email_norm = email.lower()
+        user = db.session.query(User).filter(func.lower(User.email) == email_norm).first()
     else:
-        user = db.session.query(User).filter_by(username=username).first()
+        username_norm = username.lower()
+        user = db.session.query(User).filter(func.lower(User.username) == username_norm).first()
     
     if not user or not user.check_password(password):
         print(f"   ❌ FAILED: Invalid credentials")
@@ -120,8 +123,8 @@ def register():
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     data = request.get_json() or {}
-    username = data.get('username')
-    email = data.get('email')
+    username = (data.get('username') or '').strip()
+    email = (data.get('email') or '').strip()
     password = data.get('password')
 
     # Log da tentativa de registro
@@ -138,15 +141,21 @@ def register():
         auth_logger.warning(f"Register failed - Missing fields for {username or email}")
         return jsonify({'error': 'username, email e password são obrigatórios'}), 400
 
-    # Verificar se já existe
-    existing_user = db.session.query(User).filter((User.username == username) | (User.email == email)).first()
+    # Normalizar para verificações case-insensitive
+    username_norm = username.lower()
+    email_norm = email.lower()
+
+    # Verificar se já existe (case-insensitive para username e email)
+    existing_user = db.session.query(User).filter(
+        or_(func.lower(User.username) == username_norm, func.lower(User.email) == email_norm)
+    ).first()
     if existing_user:
         print(f"   ❌ FAILED: User or email already exists")
         auth_logger.warning(f"Register failed - User/email already exists: {username}/{email}")
         return jsonify({'error': 'Usuário ou email já existe'}), 409
 
     # Criar usuário
-    user = User(username=username, email=email)
+    user = User(username=username, email=email_norm)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()

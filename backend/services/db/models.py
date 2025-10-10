@@ -45,12 +45,14 @@ class Player(db.Model):
     status = Column(String(20), nullable=False, default=PlayerStatus.ACTIVE.value)
     # monthly_fee removido - controlado na gestão mensal
     is_active = Column(Boolean, nullable=False, default=True)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
+    user = relationship("User", back_populates="players")
     monthly_payments = relationship("MonthlyPlayer", back_populates="player", cascade="all, delete-orphan")
     
     @validates('status')
@@ -79,6 +81,7 @@ class MonthlyPeriod(db.Model):
     year = Column(Integer, nullable=False)
     name = Column(String(50), nullable=False)  # Ex: "Janeiro 2024"
     is_active = Column(Boolean, nullable=False, default=True)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     
     # Campos calculados/cache
     total_expected = Column(Numeric(10, 2), nullable=False, default=0.00)
@@ -90,6 +93,7 @@ class MonthlyPeriod(db.Model):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
+    user = relationship("User", back_populates="monthly_periods")
     monthly_players = relationship("MonthlyPlayer", back_populates="monthly_period", cascade="all, delete-orphan")
     casual_players = relationship("CasualPlayer", back_populates="monthly_period", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="monthly_period", cascade="all, delete-orphan")
@@ -118,6 +122,7 @@ class MonthlyPlayer(db.Model):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     player_id = Column(String(36), ForeignKey('players.id'), nullable=False)
     monthly_period_id = Column(String(36), ForeignKey('monthly_periods.id'), nullable=False)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     
     # Dados do jogador no momento (snapshot)
     player_name = Column(String(100), nullable=False)
@@ -140,6 +145,7 @@ class MonthlyPlayer(db.Model):
     # Relacionamentos
     player = relationship("Player", back_populates="monthly_payments")
     monthly_period = relationship("MonthlyPeriod", back_populates="monthly_players")
+    user = relationship("User", back_populates="monthly_players")
     
     @property
     def effective_monthly_fee(self):
@@ -163,6 +169,7 @@ class CasualPlayer(db.Model):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     monthly_period_id = Column(String(36), ForeignKey('monthly_periods.id'), nullable=False)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     
     player_name = Column(String(100), nullable=False)
     play_date = Column(Date, nullable=False)
@@ -179,6 +186,7 @@ class CasualPlayer(db.Model):
     
     # Relacionamentos
     monthly_period = relationship("MonthlyPeriod", back_populates="casual_players")
+    user = relationship("User", back_populates="casual_players")
     
     @validates('status')
     def validate_status(self, key, status):
@@ -197,6 +205,7 @@ class Expense(db.Model):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     monthly_period_id = Column(String(36), ForeignKey('monthly_periods.id'), nullable=False)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     
     description = Column(Text, nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
@@ -211,6 +220,7 @@ class Expense(db.Model):
     
     # Relacionamentos
     monthly_period = relationship("MonthlyPeriod", back_populates="expenses")
+    user = relationship("User", back_populates="expenses")
     
     @validates('month')
     def validate_month(self, key, month):
@@ -240,8 +250,8 @@ Index('idx_casual_players_period', CasualPlayer.monthly_period_id, CasualPlayer.
 # Índice para buscar despesas por período
 Index('idx_expenses_period', Expense.monthly_period_id, Expense.month, Expense.year)
 
-# Índice único para evitar períodos duplicados
-Index('idx_monthly_periods_unique', MonthlyPeriod.month, MonthlyPeriod.year, unique=True)
+# Índice único para evitar períodos duplicados por usuário
+Index('idx_monthly_periods_unique', MonthlyPeriod.month, MonthlyPeriod.year, MonthlyPeriod.user_id, unique=True)
 
 class User(db.Model):
     """Modelo de usuário para autenticação e perfil"""
@@ -256,6 +266,13 @@ class User(db.Model):
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    players = relationship("Player", back_populates="user", cascade="all, delete-orphan")
+    monthly_periods = relationship("MonthlyPeriod", back_populates="user", cascade="all, delete-orphan")
+    monthly_players = relationship("MonthlyPlayer", back_populates="user", cascade="all, delete-orphan")
+    casual_players = relationship("CasualPlayer", back_populates="user", cascade="all, delete-orphan")
+    expenses = relationship("Expense", back_populates="user", cascade="all, delete-orphan")
 
     def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)

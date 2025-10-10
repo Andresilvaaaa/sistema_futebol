@@ -112,7 +112,23 @@ class JWTManager {
       const parts = token.split('.')
       if (parts.length !== 3) return null
       
-      const payload = JSON.parse(atob(parts[1]))
+      // Decodifica Base64URL de forma robusta
+      const base64UrlToBase64 = (str: string) => {
+        let output = str.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = output.length % 4;
+        if (pad) output += '='.repeat(4 - pad);
+        return output;
+      }
+      const decodePayload = (str: string) => {
+        try {
+          return JSON.parse(atob(base64UrlToBase64(str)))
+        } catch {
+          return null
+        }
+      }
+
+      const payload = decodePayload(parts[1])
+      if (!payload) return null
       
       // Verifica se o token não expirou
       if (payload.exp * 1000 < Date.now()) return null
@@ -173,9 +189,86 @@ export class AuthService {
     // Obter apenas do token JWT - sem fallback para localStorage
     const token = CookieManager.get(TOKEN_STORAGE_KEY)
     if (token) {
-      return JWTManager.validateToken(token)
+      const userFromToken = JWTManager.validateToken(token)
+      if (userFromToken) {
+        // Se o token não traz nome/email/role, tenta complementar via localStorage
+        if (!userFromToken.name || !userFromToken.email || !userFromToken.role) {
+          try {
+            const userId = userFromToken.id
+            if (userId) {
+              const storageKey = getAuthStorageKey(userId)
+              const stored = localStorage.getItem(storageKey)
+              if (stored) {
+                const parsed = JSON.parse(stored)
+                const storedUser = parsed?.user
+                if (storedUser && storedUser.id === userId) {
+                  return {
+                    id: userId,
+                    name: storedUser.name ?? userFromToken.name ?? 'Usuário',
+                    email: storedUser.email ?? userFromToken.email ?? '',
+                    role: storedUser.role ?? userFromToken.role ?? 'user'
+                  }
+                }
+              }
+            }
+          } catch {
+            // ignora erros de leitura
+          }
+          // Complemento geral: se não encontrou por ID, varre todas as chaves válidas
+          try {
+            const allKeys = Object.keys(localStorage)
+            const authKeys = allKeys.filter(key => key.startsWith(AUTH_STORAGE_KEY_PREFIX + '_'))
+            let bestUser: User | null = null
+            let bestExp = 0
+            for (const key of authKeys) {
+              const raw = localStorage.getItem(key)
+              if (!raw) continue
+              const parsed = JSON.parse(raw)
+              if (parsed?.expiresAt && Date.now() < parsed.expiresAt && parsed?.user) {
+                if (parsed.expiresAt > bestExp) {
+                  bestExp = parsed.expiresAt
+                  bestUser = parsed.user as User
+                }
+              }
+            }
+            if (bestUser) {
+              return {
+                id: bestUser.id ?? userFromToken.id,
+                name: bestUser.name ?? userFromToken.name ?? 'Usuário',
+                email: bestUser.email ?? userFromToken.email ?? '',
+                role: bestUser.role ?? userFromToken.role ?? 'user'
+              }
+            }
+          } catch {
+            // ignora erros
+          }
+        }
+        // Se não foi possível complementar via localStorage, retorna com fallbacks seguros
+        return {
+          id: userFromToken.id,
+          name: userFromToken.name ?? 'Usuário',
+          email: userFromToken.email ?? '',
+          role: (userFromToken.role ?? 'user') as 'admin' | 'user'
+        }
+      }
     }
-    
+
+    // Fallback: tenta obter usuário do localStorage se houver sessão válida
+    try {
+      const allKeys = Object.keys(localStorage)
+      const authKeys = allKeys.filter(key => key.startsWith(AUTH_STORAGE_KEY_PREFIX + '_'))
+      for (const key of authKeys) {
+        const authDataRaw = localStorage.getItem(key)
+        if (!authDataRaw) continue
+        const authData = JSON.parse(authDataRaw)
+        if (authData?.expiresAt && Date.now() < authData.expiresAt && authData?.user) {
+          return authData.user as User
+        }
+      }
+    } catch {
+      // ignora erros
+    }
+
     // Se não há token JWT válido, o usuário não está logado
     return null
   }
@@ -206,9 +299,9 @@ export class AuthService {
       // Montar objeto User usando dados reais retornados pelo backend
       const user: User = {
         id: String(data.user.id ?? data.user.username ?? 'unknown'),
-        name: data.user.username ?? data.user.email ?? 'Usuário',
-        email: data.user.email ?? `${data.user.username ?? 'user'}@futebol.com`,
-        role: ((data.user.username === 'admin') || (data.user.email && data.user.email.startsWith('admin'))) ? 'admin' : 'user'
+        name: data.user.name ?? data.user.username ?? data.user.email ?? 'Usuário',
+        email: data.user.email ?? `${data.user.username ?? data.user.name ?? 'user'}@futebol.com`,
+        role: data.user.role ?? (((data.user.username === 'admin') || (data.user.email && data.user.email.startsWith('admin'))) ? 'admin' : 'user')
       };
       
       // Armazena token em cookie seguro
@@ -259,9 +352,9 @@ export class AuthService {
 
       const user: User = {
         id: String(data.user.id ?? 'unknown'),
-        name: data.user.username ?? name,
+        name: data.user.name ?? data.user.username ?? name,
         email: data.user.email ?? email,
-        role: 'user'
+        role: (data.user.role ?? 'user') as 'admin' | 'user'
       }
 
       // Armazena token retornado pelo backend

@@ -4,11 +4,16 @@ Script para criar usuário admin no banco de dados
 """
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app import create_app
-from services.db.connection import db
-from services.db.models import User
+# Garantir que o diretório raiz do projeto esteja no sys.path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+# Importar da package 'backend' para usar a MESMA instância do SQLAlchemy
+from backend import create_app
+from backend.services.db.connection import db
+from backend.services.db.models import User
 
 def create_admin_user():
     """Cria usuário admin se não existir"""

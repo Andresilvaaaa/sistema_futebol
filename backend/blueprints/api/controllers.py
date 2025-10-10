@@ -89,6 +89,9 @@ def create_player():
     """
     data = request.json
     
+    # Obter user_id do token JWT
+    user_id = get_jwt_identity()
+    
     # Validação básica
     if not data:
         raise ValidationError("Dados não fornecidos")
@@ -111,17 +114,17 @@ def create_player():
         email = email.strip().lower() if isinstance(email, str) else email
     position = data['position'].strip() if isinstance(data.get('position'), str) else data['position']
     
-    # Verificar duplicidade de telefone
-    existing_player = Player.query.filter_by(phone=phone).first()
+    # Verificar duplicidade de telefone (apenas para o usuário atual)
+    existing_player = Player.query.filter_by(phone=phone, user_id=user_id).first()
     if existing_player:
         raise ValidationError(
             "Já existe um jogador com este telefone",
             {'phone': ['Telefone já cadastrado']}
         )
     
-    # Verificar duplicidade de email apenas se fornecido
+    # Verificar duplicidade de email apenas se fornecido (apenas para o usuário atual)
     if email:
-        existing_email = Player.query.filter_by(email=email).first()
+        existing_email = Player.query.filter_by(email=email, user_id=user_id).first()
         if existing_email:
             raise ValidationError(
                 "Já existe um jogador com este email",
@@ -135,6 +138,7 @@ def create_player():
         phone=phone,
         email=email,  # Pode ser None
         position=position,
+        user_id=user_id,  # Associar ao usuário logado
         # monthly_fee removido - controlado na gestão mensal
         status='active'
     )
@@ -306,6 +310,10 @@ def get_monthly_payments():
     Filtros opcionais: year, month, player_id, status.
     """
     print("[DEBUG][get_monthly_payments] Iniciando listagem de pagamentos mensais")
+    
+    # Obter user_id do token JWT
+    current_user_id = get_jwt_identity()
+    
     # Parâmetros de filtro
     year = request.args.get('year', type=int)
     month = request.args.get('month', type=int)
@@ -315,8 +323,8 @@ def get_monthly_payments():
     per_page = min(int(request.args.get('per_page', 20)), 100)
     print(f"[DEBUG][get_monthly_payments] filtros year={year}, month={month}, player_id={player_id}, status={status}, page={page}, per_page={per_page}")
 
-    # Buscar períodos com filtros e paginação
-    period_query = db.session.query(MonthlyPeriod)
+    # Buscar períodos com filtros e paginação (filtrado por usuário)
+    period_query = db.session.query(MonthlyPeriod).filter(MonthlyPeriod.user_id == current_user_id)
     if year:
         period_query = period_query.filter(MonthlyPeriod.year == year)
     if month:
@@ -456,6 +464,9 @@ def create_monthly_payment():
     Cria um novo período de pagamento mensal e automaticamente importa todos os jogadores ativos
     """
     try:
+        # Obter user_id do token JWT
+        current_user_id = get_jwt_identity()
+        
         # Validar dados de entrada
         schema = MonthlyPaymentCreateSchema()
         print(f"[DEBUG][create_monthly_payment] request.json bruto={request.json}")
@@ -463,12 +474,13 @@ def create_monthly_payment():
         print(f"[DEBUG][create_monthly_payment] dados validados pelo schema={data}")
         logging.info(f"[MonthlyPeriod] Request to create period: month={data['month']}, year={data['year']}")
 
-        # Verificar se já existe período para o mês/ano
-        print(f"[DEBUG][create_monthly_payment] verificando período existente para {data['month']}/{data['year']}")
+        # Verificar se já existe período para o mês/ano (filtrado por usuário)
+        print(f"[DEBUG][create_monthly_payment] verificando período existente para {data['month']}/{data['year']} do usuário {current_user_id}")
         existing_period = MonthlyPeriod.query.filter(
             and_(
                 MonthlyPeriod.year == data['year'],
-                MonthlyPeriod.month == data['month']
+                MonthlyPeriod.month == data['month'],
+                MonthlyPeriod.user_id == current_user_id
             )
         ).first()
 
@@ -476,9 +488,14 @@ def create_monthly_payment():
             print(f"[DEBUG][create_monthly_payment] período já existe id={existing_period.id}")
             return APIResponse.error('Já existe um período para este mês/ano', status_code=400)
 
-        # Buscar todos os jogadores ativos
-        print("[DEBUG][create_monthly_payment] consultando jogadores ativos")
-        active_players = Player.query.filter(Player.is_active == True).all()
+        # Buscar todos os jogadores ativos do usuário
+        print("[DEBUG][create_monthly_payment] consultando jogadores ativos do usuário")
+        active_players = Player.query.filter(
+            and_(
+                Player.is_active == True,
+                Player.user_id == current_user_id
+            )
+        ).all()
         logging.info(f"[MonthlyPeriod] Active players found: {len(active_players)}")
         print(f"[DEBUG][create_monthly_payment] jogadores ativos encontrados={len(active_players)}")
 
@@ -521,7 +538,8 @@ def create_monthly_payment():
             total_expected=total_expected,
             total_received=Decimal('0'),
             players_count=len(active_players or []),
-            is_active=True
+            is_active=True,
+            user_id=current_user_id
         )
 
         db.session.add(period)
@@ -1008,9 +1026,13 @@ def add_players_to_monthly_period(period_id):
     print(f"[BACKEND] request.json: {request.json}")
     
     try:
-        # Verificar se o período existe
+        # Obter user_id do token JWT
+        current_user_id = get_jwt_identity()
+        print(f"[BACKEND] user_id do token: {current_user_id}")
+        
+        # Verificar se o período existe e pertence ao usuário
         print(f"[BACKEND] Verificando se o período {period_id} existe...")
-        period = MonthlyPeriod.query.get(period_id)
+        period = MonthlyPeriod.query.filter_by(id=period_id, user_id=current_user_id).first()
         if not period:
             print(f"[BACKEND] ERRO: Período {period_id} não encontrado")
             return APIResponse.error('Período não encontrado', status_code=404)
@@ -1034,9 +1056,12 @@ def add_players_to_monthly_period(period_id):
         
         print(f"[BACKEND] Validação inicial OK - {len(player_ids)} jogadores para adicionar")
         
-        # Buscar jogadores válidos
+        # Buscar jogadores válidos que pertencem ao usuário
         print(f"[BACKEND] Buscando jogadores no banco de dados...")
-        players = Player.query.filter(Player.id.in_(player_ids)).all()
+        players = Player.query.filter(
+            Player.id.in_(player_ids),
+            Player.user_id == current_user_id
+        ).all()
         print(f"[BACKEND] Jogadores encontrados: {len(players)}")
         
         for player in players:
@@ -1053,7 +1078,8 @@ def add_players_to_monthly_period(period_id):
         existing_players = MonthlyPlayer.query.filter(
             and_(
                 MonthlyPlayer.monthly_period_id == period_id,
-                MonthlyPlayer.player_id.in_(player_ids)
+                MonthlyPlayer.player_id.in_(player_ids),
+                MonthlyPlayer.user_id == current_user_id
             )
         ).all()
         
@@ -1086,6 +1112,7 @@ def add_players_to_monthly_period(period_id):
                 id=str(uuid.uuid4()),
                 monthly_period_id=period_id,
                 player_id=player.id,
+                user_id=current_user_id,
                 player_name=player.name,
                 position=player.position,
                 phone=player.phone or '',
@@ -1213,15 +1240,23 @@ def get_monthly_period_players(period_id):
     """
     try:
         print(f"[DEBUG][get_monthly_period_players] Iniciando listagem para period_id={period_id}")
-        # Verificar se o período existe
-        period = MonthlyPeriod.query.get(period_id)
+        
+        # Obter user_id do token JWT
+        current_user_id = get_jwt_identity()
+        print(f"[DEBUG][get_monthly_period_players] user_id do token: {current_user_id}")
+        
+        # Verificar se o período existe e pertence ao usuário
+        period = MonthlyPeriod.query.filter_by(id=period_id, user_id=current_user_id).first()
         if not period:
             return APIResponse.error("Período mensal não encontrado", status_code=404)
         
         print(f"[DEBUG][get_monthly_period_players] período encontrado: {period.name}")
         
-        # Buscar jogadores do período
-        monthly_players = MonthlyPlayer.query.filter_by(monthly_period_id=period_id).all()
+        # Buscar jogadores do período filtrados por user_id
+        monthly_players = MonthlyPlayer.query.filter_by(
+            monthly_period_id=period_id, 
+            user_id=current_user_id
+        ).all()
         print(f"[DEBUG][get_monthly_period_players] jogadores carregados={len(monthly_players)}")
         
         result = []
@@ -1306,14 +1341,22 @@ def get_monthly_period_casual_players(period_id):
     """
     try:
         print(f"[DEBUG][get_monthly_period_casual_players] Iniciando listagem para period_id={period_id}")
-        # Verificar se o período existe
-        period = MonthlyPeriod.query.get(period_id)
+        
+        # Obter user_id do token JWT
+        current_user_id = get_jwt_identity()
+        print(f"[DEBUG][get_monthly_period_casual_players] user_id do token: {current_user_id}")
+        
+        # Verificar se o período existe e pertence ao usuário
+        period = MonthlyPeriod.query.filter_by(id=period_id, user_id=current_user_id).first()
         if not period:
             print("[DEBUG][get_monthly_period_casual_players] período não encontrado")
             return jsonify({'error': 'Período não encontrado'}), 404
         
-        # Buscar jogadores casuais do período
-        casual_players = CasualPlayer.query.filter_by(monthly_period_id=period_id).all()
+        # Buscar jogadores casuais do período filtrados por user_id
+        casual_players = CasualPlayer.query.filter_by(
+            monthly_period_id=period_id,
+            user_id=current_user_id
+        ).all()
         print(f"[DEBUG][get_monthly_period_casual_players] jogadores casuais carregados={len(casual_players)}")
         
         result = []
@@ -1349,8 +1392,12 @@ def create_casual_player(period_id):
     try:
         print(f"[DEBUG][create_casual_player] Iniciando criação para period_id={period_id}")
         
-        # Verificar se o período existe
-        period = MonthlyPeriod.query.get(period_id)
+        # Obter user_id do token JWT
+        current_user_id = get_jwt_identity()
+        print(f"[DEBUG][create_casual_player] user_id do token: {current_user_id}")
+        
+        # Verificar se o período existe e pertence ao usuário
+        period = MonthlyPeriod.query.filter_by(id=period_id, user_id=current_user_id).first()
         if not period:
             print("[DEBUG][create_casual_player] período não encontrado")
             return APIResponse.error('Período não encontrado', 404)
@@ -1369,6 +1416,7 @@ def create_casual_player(period_id):
         # Criar jogador casual
         casual_player = CasualPlayer(
             monthly_period_id=period_id,
+            user_id=current_user_id,
             player_name=validated_data['player_name'],
             play_date=validated_data['play_date'],
             invited_by=validated_data.get('invited_by', ''),

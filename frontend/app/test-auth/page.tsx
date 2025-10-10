@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { AuthService, useAuth } from '@/lib/auth'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -60,6 +61,17 @@ export default function TestAuthPage() {
       setIsLoading(false)
     }
   }
+
+  // Auto-login quando query param ?auto=1 estiver presente
+  const params = useSearchParams()
+  useEffect(() => {
+    const auto = params.get('auto')
+    if (auto === '1' && !isAuthenticated && !isLoading) {
+      // usa os valores atuais de email e password
+      handleLogin()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, isAuthenticated, isLoading])
 
   const handleLogout = () => {
     logout()
