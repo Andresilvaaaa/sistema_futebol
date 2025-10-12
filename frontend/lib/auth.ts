@@ -281,12 +281,8 @@ export class AuthService {
          headers: {
            'Content-Type': 'application/json',
          },
-         // Se o campo username parecer um email, enviar como 'email' para o backend
-         body: JSON.stringify(
-           username && username.includes('@')
-             ? { email: username, password }
-             : { username, password }
-         ),
+         // Backend espera sempre 'username' e 'password'
+         body: JSON.stringify({ username, password }),
        });
 
       if (!response.ok) {

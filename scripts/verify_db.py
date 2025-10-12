@@ -1,45 +1,84 @@
-import sqlite3
+"""
+Verificação rápida do banco de dados (smoke check)
+
+Executa:
+- Conexão ao banco via Flask app factory
+- Ativa PRAGMA foreign_keys (SQLite)
+- Lista tabelas e conta registros básicos
+
+Saída amigável para inspeção manual.
+"""
+
 import os
+import sys
+from typing import List
+
+# Garantir que o diretório raiz do projeto esteja no sys.path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from backend import create_app
+from backend.services.db.connection import db, _enable_sqlite_foreign_keys
 
 
-def main():
-    # Preferir o banco na raiz do projeto (instance/futebol_dev.db)
-    root_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'futebol_dev.db')
-    backend_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', 'instance', 'futebol_dev.db')
+def list_tables() -> List[str]:
+    inspector = db.inspect(db.engine)
+    return inspector.get_table_names()
 
-    db_path = root_db if os.path.exists(root_db) else backend_db
-    print(f"Using DB: {db_path}")
 
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-
-    # Listar colunas de monthly_players
-    try:
-        cur.execute("PRAGMA table_info('monthly_players')")
-        cols = cur.fetchall()
-        print('monthly_players columns:', [c[1] for c in cols])
-    except Exception as e:
-        print('Error reading monthly_players columns:', e)
-
-    # Listar colunas de casual_players
-    try:
-        cur.execute("PRAGMA table_info('casual_players')")
-        cols = cur.fetchall()
-        print('casual_players columns:', [c[1] for c in cols])
-    except Exception as e:
-        print('Error reading casual_players columns:', e)
-
-    # Contar user_id nulos
-    for tbl in ('monthly_players', 'casual_players'):
+def main() -> int:
+    print("\n🔎 Verificando banco de dados...")
+    app = create_app()
+    with app.app_context():
+        # Forçar criação de tabelas em dev se não houver migrações aplicadas
         try:
-            cur.execute(f"SELECT COUNT(*) FROM {tbl} WHERE user_id IS NULL")
-            count = cur.fetchone()[0]
-            print(f"{tbl} null user_id:", count)
+            from backend.services.db import models  # noqa
+            db.create_all()
+        except Exception:
+            pass
+
+        # Ativar PRAGMA foreign_keys para SQLite
+        try:
+            _enable_sqlite_foreign_keys(app)
+            print("✅ PRAGMA foreign_keys=ON (SQLite)")
         except Exception as e:
-            print(f"Error counting NULL user_id in {tbl}:", e)
+            print(f"⚠️ Não foi possível aplicar PRAGMA: {e}")
 
-    conn.close()
+        # Testar conexão
+        try:
+            result = db.session.execute(db.text("SELECT 1")).scalar()
+            assert result == 1
+            print("✅ Conexão ao DB funcionando (SELECT 1)")
+        except Exception as e:
+            print(f"❌ Falha na conexão com o DB: {e}")
+            return 1
+
+        # Listar tabelas
+        try:
+            tables = list_tables()
+            print(f"📦 Tabelas detectadas ({len(tables)}): {', '.join(tables) if tables else 'nenhuma'}")
+        except Exception as e:
+            print(f"❌ Falha ao listar tabelas: {e}")
+            return 1
+
+        # Consultas simples por tabela chave
+        def count(table: str) -> int:
+            try:
+                return db.session.execute(db.text(f"SELECT COUNT(*) FROM {table}")).scalar() or 0
+            except Exception:
+                return -1
+
+        for table in [
+            "users", "players", "monthly_periods", "monthly_players", "casual_players", "expenses"
+        ]:
+            c = count(table)
+            flag = "✅" if c >= 0 else "❌"
+            print(f"{flag} {table}: {'n/a' if c < 0 else c} registros")
+
+    print("\n🏁 Verificação concluída.")
+    return 0
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    sys.exit(main())

@@ -40,7 +40,6 @@ class PlayerResponseSchema(Schema):
     id = fields.Str()
     name = fields.Str()
     position = fields.Str()
-    monthly_fee = fields.Decimal(as_string=True)
     status = fields.Str()
     phone = fields.Str()
     email = fields.Str()

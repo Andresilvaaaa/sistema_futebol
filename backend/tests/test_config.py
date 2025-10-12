@@ -7,7 +7,7 @@ import os
 import sys
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Numeric, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Numeric, ForeignKey, Text, UniqueConstraint, ForeignKeyConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, date
@@ -36,6 +36,23 @@ def create_test_app():
     # Criar instância isolada do SQLAlchemy
     db = SQLAlchemy()
     db.init_app(app)
+
+    # Habilitar chaves estrangeiras no SQLite para suportar ondelete='CASCADE'
+    try:
+        from sqlalchemy import event
+        from sqlalchemy.engine import Engine
+
+        @event.listens_for(Engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            try:
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+            except Exception:
+                pass
+    except Exception:
+        # Ambiente de teste simplificado: ignorar se não for possível configurar
+        pass
     
     # Registrar blueprints básicos para testes
     from flask import Blueprint, jsonify, request, current_app
@@ -506,12 +523,17 @@ def setup_test_models(db):
     
     class Player(db.Model):
         __tablename__ = 'players'
+        __table_args__ = (
+            UniqueConstraint('user_id', 'phone', name='uq_players_user_phone'),
+            UniqueConstraint('id', 'user_id', name='uq_players_id_user'),
+        )
         
         id = Column(Integer, primary_key=True)
+        user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
         name = Column(String(100), nullable=False)
         position = Column(String(50))
-        phone = Column(String(20), unique=True)
-        email = Column(String(120), unique=True)
+        phone = Column(String(20), nullable=False)
+        email = Column(String(120))
         monthly_fee = Column(Numeric(10, 2), default=Decimal('50.00'))
         join_date = Column(Date, default=date.today)
         is_active = Column(Boolean, default=True)
@@ -520,12 +542,16 @@ def setup_test_models(db):
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
         
         # Relacionamentos
-        monthly_records = relationship('MonthlyPlayer', back_populates='player')
+        monthly_records = relationship('MonthlyPlayer', back_populates='player', cascade="all, delete-orphan")
     
     class MonthlyPeriod(db.Model):
         __tablename__ = 'monthly_periods'
+        __table_args__ = (
+            UniqueConstraint('id', 'user_id', name='uq_monthly_periods_id_user'),
+        )
         
         id = Column(Integer, primary_key=True)
+        user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
         month = Column(Integer, nullable=False)
         year = Column(Integer, nullable=False)
         name = Column(String(100), nullable=False)
@@ -533,16 +559,22 @@ def setup_test_models(db):
         created_at = Column(DateTime, default=datetime.utcnow)
         
         # Relacionamentos
-        monthly_players = relationship('MonthlyPlayer', back_populates='monthly_period')
-        casual_players = relationship('CasualPlayer', back_populates='monthly_period')
-        expenses = relationship('Expense', back_populates='monthly_period')
+        monthly_players = relationship('MonthlyPlayer', back_populates='monthly_period', cascade="all, delete-orphan")
+        casual_players = relationship('CasualPlayer', back_populates='monthly_period', cascade="all, delete-orphan")
+        expenses = relationship('Expense', back_populates='monthly_period', cascade="all, delete-orphan")
     
     class MonthlyPlayer(db.Model):
         __tablename__ = 'monthly_players'
+        __table_args__ = (
+            UniqueConstraint('user_id', 'player_id', 'monthly_period_id', name='uq_monthly_players_user_player_period'),
+            ForeignKeyConstraint(['player_id', 'user_id'], ['players.id', 'players.user_id'], ondelete='CASCADE'),
+            ForeignKeyConstraint(['monthly_period_id', 'user_id'], ['monthly_periods.id', 'monthly_periods.user_id'], ondelete='CASCADE'),
+        )
         
         id = Column(Integer, primary_key=True)
         player_id = Column(Integer, ForeignKey('players.id'), nullable=False)
         monthly_period_id = Column(Integer, ForeignKey('monthly_periods.id'), nullable=False)
+        user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
         player_name = Column(String(100), nullable=False)
         position = Column(String(50))
         phone = Column(String(20))
@@ -559,9 +591,13 @@ def setup_test_models(db):
     
     class CasualPlayer(db.Model):
         __tablename__ = 'casual_players'
+        __table_args__ = (
+            ForeignKeyConstraint(['monthly_period_id', 'user_id'], ['monthly_periods.id', 'monthly_periods.user_id'], ondelete='CASCADE'),
+        )
         
         id = Column(Integer, primary_key=True)
         monthly_period_id = Column(Integer, ForeignKey('monthly_periods.id'), nullable=False)
+        user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
         player_name = Column(String(100), nullable=False)
         play_date = Column(Date, nullable=False)
         invited_by = Column(String(100))
@@ -573,9 +609,13 @@ def setup_test_models(db):
     
     class Expense(db.Model):
         __tablename__ = 'expenses'
+        __table_args__ = (
+            ForeignKeyConstraint(['monthly_period_id', 'user_id'], ['monthly_periods.id', 'monthly_periods.user_id'], ondelete='CASCADE'),
+        )
         
         id = Column(Integer, primary_key=True)
         monthly_period_id = Column(Integer, ForeignKey('monthly_periods.id'), nullable=False)
+        user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
         description = Column(String(200), nullable=False)
         category = Column(String(50), nullable=False)
         amount = Column(Numeric(10, 2), nullable=False)

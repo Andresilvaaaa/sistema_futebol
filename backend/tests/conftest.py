@@ -84,11 +84,12 @@ def sample_user(app, db_session):
 
 
 @pytest.fixture
-def sample_player(app, db_session):
+def sample_player(app, db_session, sample_user):
     """Cria um jogador de exemplo para testes"""
     Player = app.test_models['Player']
     
     player = Player(
+        user_id=sample_user.id,
         name='João Silva',
         position='Atacante',
         phone='11999999999',
@@ -101,12 +102,13 @@ def sample_player(app, db_session):
 
 
 @pytest.fixture
-def sample_players(app, db_session):
+def sample_players(app, db_session, sample_user):
     """Cria múltiplos jogadores para testes"""
     Player = app.test_models['Player']
     
     players_data = [
         {
+            'user_id': sample_user.id,
             'name': 'João Silva',
             'position': 'Atacante',
             'phone': '11999999999',
@@ -115,6 +117,7 @@ def sample_players(app, db_session):
             'is_active': True
         },
         {
+            'user_id': sample_user.id,
             'name': 'Pedro Santos',
             'position': 'Meio-campo',
             'phone': '11888888888',
@@ -123,6 +126,7 @@ def sample_players(app, db_session):
             'is_active': True
         },
         {
+            'user_id': sample_user.id,
             'name': 'Carlos Oliveira',
             'position': 'Zagueiro',
             'phone': '11777777777',
@@ -151,11 +155,12 @@ def sample_players(app, db_session):
 
 
 @pytest.fixture
-def sample_monthly_period(app, db_session):
+def sample_monthly_period(app, db_session, sample_user):
     """Cria um período mensal de exemplo para testes"""
     MonthlyPeriod = app.test_models['MonthlyPeriod']
     
     period = MonthlyPeriod(
+        user_id=sample_user.id,
         month=3,
         year=2024,
         name='Março 2024'
@@ -180,6 +185,7 @@ def sample_monthly_player(app, db_session, sample_player, sample_monthly_period)
     monthly_player = MonthlyPlayer(
         player_id=sample_player.id,
         monthly_period_id=sample_monthly_period.id,
+        user_id=sample_player.user_id,
         player_name=sample_player.name,
         position=sample_player.position,
         phone=sample_player.phone,
@@ -193,12 +199,13 @@ def sample_monthly_player(app, db_session, sample_player, sample_monthly_period)
 
 
 @pytest.fixture
-def sample_casual_player(app, db_session, sample_monthly_period):
+def sample_casual_player(app, db_session, sample_monthly_period, sample_user):
     """Cria um jogador casual de exemplo para testes"""
     CasualPlayer = app.test_models['CasualPlayer']
     
     casual_player = CasualPlayer(
         monthly_period_id=sample_monthly_period.id,
+        user_id=sample_user.id,
         player_name='Visitante Silva',
         play_date=date(2024, 3, 15),
         invited_by='João Silva',
@@ -210,12 +217,13 @@ def sample_casual_player(app, db_session, sample_monthly_period):
 
 
 @pytest.fixture
-def sample_expense(app, db_session, sample_monthly_period):
+def sample_expense(app, db_session, sample_monthly_period, sample_user):
     """Cria uma despesa de exemplo para testes"""
     Expense = app.test_models['Expense']
     
     expense = Expense(
         monthly_period_id=sample_monthly_period.id,
+        user_id=sample_user.id,
         description='Aluguel do campo',
         category='Campo',
         amount=Decimal('200.00'),
@@ -304,6 +312,7 @@ def sample_monthly_players(app, db_session, sample_players, sample_monthly_perio
         monthly_player = MonthlyPlayer(
             player_id=player.id,
             monthly_period_id=sample_monthly_period.id,
+            user_id=player.user_id,
             player_name=player.name,
             position=player.position,
             phone=player.phone,

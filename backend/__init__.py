@@ -12,6 +12,7 @@ from flask_marshmallow import Marshmallow
 # Importações locais
 from .config import get_config
 from .services.db.connection import db, migrate
+from .services.db.connection import _enable_sqlite_foreign_keys  # internal helper
 from .blueprints.api.controllers import api_bp
 from .blueprints.auth.controllers import auth_bp
 from .blueprints.admin.controllers import admin_bp
@@ -71,6 +72,13 @@ def init_extensions(app):
     # Banco de dados
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # Garantir integridade referencial em SQLite (dev/test)
+    try:
+        with app.app_context():
+            _enable_sqlite_foreign_keys(app)
+    except Exception as e:
+        app.logger.warning(f"Falha ao configurar PRAGMA foreign_keys: {e}")
     
     # CORS
     CORS(app, 

@@ -50,51 +50,201 @@ flask run
 
 ## 📡 Endpoints Disponíveis
 
+### Base URL (desenvolvimento)
+
+- `http://127.0.0.1:5000`
+
 ### 🔓 Endpoints Públicos
 
-**GET /** - Informações do sistema
+- `GET /` — Informações do sistema
 ```bash
-curl http://localhost:5000/
+curl http://127.0.0.1:5000/
 ```
 
-**GET /health** - Health check
+- `GET /health` — Health check
 ```bash
-curl http://localhost:5000/health
+curl http://127.0.0.1:5000/health
 ```
 
-**POST /auth/login** - Login
+- `GET /api/info` — Informações da API
 ```bash
-curl -X POST http://localhost:5000/auth/login \
+curl http://127.0.0.1:5000/api/info
+```
+
+- `GET /api/admin/system/health` — Saúde do sistema administrativo
+```bash
+curl http://127.0.0.1:5000/api/admin/system/health
+```
+
+- `POST /api/auth/login` — Login
+```bash
+curl -X POST http://127.0.0.1:5000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "admin123"}'
 ```
 
-**GET /teams** - Listar times
-```bash
-curl http://localhost:5000/teams
-```
+### 🔒 Endpoints Protegidos (requer JWT)
 
-### 🔒 Endpoints Protegidos (Requer JWT)
-
-**GET /auth/profile** - Perfil do usuário
+- `GET /api/auth/profile` — Perfil do usuário autenticado
 ```bash
-# Primeiro faça login para obter o token
-TOKEN=$(curl -s -X POST http://localhost:5000/auth/login \
+# Obter token
+TOKEN=$(curl -s -X POST http://127.0.0.1:5000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "admin123"}' | \
   python -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
 
-# Use o token para acessar
-curl http://localhost:5000/auth/profile \
+# Usar token
+curl http://127.0.0.1:5000/api/auth/profile \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-**POST /teams** - Criar time
+- `POST /api/auth/logout` — Logout
 ```bash
-curl -X POST http://localhost:5000/teams \
+curl -X POST http://127.0.0.1:5000/api/auth/logout \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Jogadores (`/api/players`)
+
+- `GET /api/players` — Lista com filtros e paginação
+```bash
+curl "http://127.0.0.1:5000/api/players?page=1&per_page=10&search=joao" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `POST /api/players` — Criar jogador
+```bash
+curl -X POST http://127.0.0.1:5000/api/players \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"name": "Novo Time", "city": "São Paulo"}'
+  -d '{
+    "name": "João Silva",
+    "email": "joao@example.com",
+    "phone": "+55 11 99999-0000",
+    "position": "Atacante",
+    "monthly_fee": 100.0
+  }'
+```
+
+- `GET /api/players/{player_id}` — Obter jogador
+```bash
+curl http://127.0.0.1:5000/api/players/PLAYER_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `PUT /api/players/{player_id}` — Atualizar jogador
+```bash
+curl -X PUT http://127.0.0.1:5000/api/players/PLAYER_ID \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "João S.",
+    "monthly_fee": 120.0
+  }'
+```
+
+- `PATCH /api/players/{player_id}/activate` — Ativar
+```bash
+curl -X PATCH http://127.0.0.1:5000/api/players/PLAYER_ID/activate \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `PATCH /api/players/{player_id}/deactivate` — Desativar
+```bash
+curl -X PATCH http://127.0.0.1:5000/api/players/PLAYER_ID/deactivate \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `DELETE /api/players/{player_id}` — Remover
+```bash
+curl -X DELETE http://127.0.0.1:5000/api/players/PLAYER_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Pagamentos Mensais
+
+- `GET /api/monthly-payments` — Lista agregada por período
+```bash
+curl http://127.0.0.1:5000/api/monthly-payments \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `POST /api/monthly-payments` — Registrar pagamento mensal
+```bash
+# Corpo depende do esquema definido; exemplo genérico
+curl -X POST http://127.0.0.1:5000/api/monthly-payments \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"monthly_period_id": "PERIOD_ID", "player_id": "PLAYER_ID", "amount": 100.0}'
+```
+
+- `PUT /api/monthly-payments/{payment_id}/pay` — Marcar como pago
+```bash
+curl -X PUT http://127.0.0.1:5000/api/monthly-payments/PAYMENT_ID/pay \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `PUT /api/monthly-players/{monthly_player_id}/custom-fee` — Ajustar taxa
+```bash
+curl -X PUT http://127.0.0.1:5000/api/monthly-players/MONTHLY_PLAYER_ID/custom-fee \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"custom_monthly_fee": 120.0}'
+```
+
+#### Estatísticas
+
+- `GET /api/stats/players` — Estatísticas de jogadores
+```bash
+curl http://127.0.0.1:5000/api/stats/players \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `GET /api/stats/payments/{year}/{month}` — Estatísticas de pagamentos
+```bash
+curl http://127.0.0.1:5000/api/stats/payments/2024/10 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Períodos Mensais
+
+- `GET /api/monthly-periods` — Listar períodos
+```bash
+curl http://127.0.0.1:5000/api/monthly-periods \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `GET /api/monthly-periods/{period_id}` — Detalhes do período
+```bash
+curl http://127.0.0.1:5000/api/monthly-periods/PERIOD_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `POST /api/monthly-periods/{period_id}/players` — Adicionar jogadores ao período
+```bash
+# Corpo depende do esquema definido; exemplo genérico
+curl -X POST http://127.0.0.1:5000/api/monthly-periods/PERIOD_ID/players \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"player_id": "PLAYER_ID"}'
+```
+
+- `GET /api/monthly-periods/{period_id}/players` — Jogadores do período
+```bash
+curl http://127.0.0.1:5000/api/monthly-periods/PERIOD_ID/players \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `GET /api/monthly-periods/{period_id}/casual-players` — Jogadores avulsos
+```bash
+curl http://127.0.0.1:5000/api/monthly-periods/PERIOD_ID/casual-players \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `GET /api/monthly-periods/{period_id}/expenses` — Despesas do período
+```bash
+curl http://127.0.0.1:5000/api/monthly-periods/PERIOD_ID/expenses \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## 🌐 CORS

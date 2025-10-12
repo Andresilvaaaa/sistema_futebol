@@ -46,12 +46,22 @@ def get_players():
             Player.name.ilike(f'%{search}%')
         )
     
-    # Paginação
-    players = query.paginate(
-        page=page, 
-        per_page=per_page, 
-        error_out=False
-    )
+    # Paginação (compatível com Flask-SQLAlchemy 3.x e versões anteriores)
+    try:
+        # Flask-SQLAlchemy < 3.x
+        players = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+    except Exception:
+        # Flask-SQLAlchemy >= 3.x usa db.paginate
+        players = db.paginate(
+            query.order_by(Player.name),
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
     
     # Serializar dados
     schema = PlayerResponseSchema(many=True)
