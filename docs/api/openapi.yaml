@@ -16,12 +16,11 @@ components:
     LoginRequest:
       type: object
       properties:
-        email:
+        username:
           type: string
-          format: email
         password:
           type: string
-      required: [email, password]
+      required: [username, password]
     LoginResponse:
       type: object
       properties:
@@ -29,6 +28,31 @@ components:
           type: string
         token_type:
           type: string
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [username, email, password]
+    RegisterResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            username:
+              type: string
+            email:
+              type: string
     Player:
       type: object
       properties:
@@ -79,6 +103,26 @@ paths:
                 $ref: '#/components/schemas/LoginResponse'
         '401':
           description: Credenciais inválidas
+  /auth/register:
+    post:
+      summary: Registro de novo usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuário criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: Erro de validação
+        '409':
+          description: Conflito (username/email já existe)
   /players:
     get:
       summary: Lista jogadores

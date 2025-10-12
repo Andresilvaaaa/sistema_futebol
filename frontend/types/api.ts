@@ -189,11 +189,23 @@ export interface PaginatedResponse<T> {
 
 // ===== TIPOS PARA ESTATÍSTICAS =====
 
+// Estatísticas de jogadores - formato da API (escopo de usuário)
+export interface ApiPlayerStats {
+  total: number;
+  active: number;
+  inactive: number;
+  pending?: number;
+  delayed?: number;
+}
+
+// Estatísticas de jogadores - formato usado internamente no frontend
 export interface PlayerStats {
   total_players: number;
   active_players: number;
   inactive_players: number;
-  players_by_position: Record<string, number>;
+  pending_players?: number;
+  delayed_players?: number;
+  players_by_position?: Record<string, number>;
 }
 
 export interface PaymentStats {

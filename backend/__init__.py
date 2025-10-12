@@ -202,6 +202,22 @@ def register_basic_routes(app):
             'database': db_status,
             'version': '1.0.0'
         })
+
+    # Espelhar o health check sob o prefixo /api para facilitar testes via proxy do frontend
+    @app.route('/api/health')
+    def api_health_check():
+        try:
+            db.session.execute('SELECT 1')
+            db_status = 'connected'
+        except Exception:
+            db_status = 'disconnected'
+
+        return jsonify({
+            'status': 'healthy',
+            'message': 'Aplicação funcionando corretamente',
+            'database': db_status,
+            'version': '1.0.0'
+        })
     
     @app.route('/api/info')
     def api_info():
@@ -218,6 +234,15 @@ def register_basic_routes(app):
                 'health': '/health',
                 'info': '/api/info'
             }
+        })
+
+    @app.route('/api/cors-test')
+    def cors_test():
+        """Endpoint simples para validar CORS/proxy"""
+        return jsonify({
+            'success': True,
+            'message': 'CORS/Proxy funcionando',
+            'timestamp': __import__('datetime').datetime.utcnow().isoformat() + 'Z'
         })
 
 

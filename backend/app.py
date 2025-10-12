@@ -47,9 +47,10 @@ if __name__ == '__main__':
     print("="*54)
 
     # Executar servidor de desenvolvimento
+    # Forçar porta 5000 para desenvolvimento (ignorar variável PORT do sistema)
     app.run(
         host='0.0.0.0',
-        port=int(os.environ.get('PORT', 5000)),
+        port=5000,  # Forçar porta 5000 para desenvolvimento
         debug=(env == 'development'),
         use_reloader=(env == 'development')
     )

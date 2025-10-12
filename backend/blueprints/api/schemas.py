@@ -187,6 +187,7 @@ class PlayerStatsSchema(Schema):
     active = fields.Int()
     inactive = fields.Int()
     pending = fields.Int()
+    delayed = fields.Int()
     suspended = fields.Int()
     total = fields.Int()
 

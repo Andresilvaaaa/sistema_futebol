@@ -5,11 +5,14 @@ Especificação
 
 Autenticação
 - `POST /api/auth/login` retorna `access_token` (JWT).
+- `POST /api/auth/register` cria novo usuário e retorna token.
 - Endpoints protegidos exigem `Authorization: Bearer <token>`.
 
 Exemplos
 - Login:
-  - `curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"secret"}'`
+  - `curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"secret"}'`
+- Registro:
+  - `curl -X POST http://localhost:5000/api/auth/register -H "Content-Type: application/json" -d '{"username":"novo_usuario","email":"novo@example.com","password":"senha123"}'`
 - Listar jogadores:
   - `curl http://localhost:5000/api/players -H "Authorization: Bearer <token>"`
 - Listar períodos:

@@ -34,8 +34,11 @@ def get_players():
     page = int(request.args.get('page', 1))
     per_page = min(int(request.args.get('per_page', 10)), 100)
     
-    # Query base
-    query = Player.query
+    # Identidade do usuário
+    current_user_id = str(get_jwt_identity())
+
+    # Query base restrita ao usuário
+    query = Player.query.filter(Player.user_id == current_user_id)
     
     # Aplicar filtros
     if status:
@@ -107,8 +110,12 @@ def create_player():
             {'missing_fields': missing_fields}
         )
     
-    # Verificar se já existe jogador com mesmo telefone
-    existing_player = Player.query.filter_by(phone=data['phone']).first()
+    current_user_id = str(get_jwt_identity())
+
+    # Verificar se já existe jogador com mesmo telefone para este usuário
+    existing_player = Player.query.filter(
+        and_(Player.phone == data['phone'], Player.user_id == current_user_id)
+    ).first()
     if existing_player:
         raise ValidationError(
             "Já existe um jogador com este telefone",
@@ -121,7 +128,8 @@ def create_player():
         name=data['name'].strip(),
         phone=data['phone'].strip(),
         position=data.get('position', '').strip(),
-        status='active'
+        status='active',
+        user_id=current_user_id
     )
     
     db.session.add(player)
@@ -145,7 +153,12 @@ def get_player(player_id):
     """
     Busca um jogador específico por ID
     """
-    player = Player.query.get_or_404(player_id)
+    current_user_id = str(get_jwt_identity())
+    player = Player.query.filter(
+        and_(Player.id == player_id, Player.user_id == current_user_id)
+    ).first()
+    if not player:
+        return jsonify({'error': 'Jogador não encontrado'}), 404
     
     schema = PlayerResponseSchema()
     player_data = schema.dump(player)
@@ -163,7 +176,12 @@ def update_player(player_id):
     """
     Atualiza dados de um jogador
     """
-    player = Player.query.get_or_404(player_id)
+    current_user_id = str(get_jwt_identity())
+    player = Player.query.filter(
+        and_(Player.id == player_id, Player.user_id == current_user_id)
+    ).first()
+    if not player:
+        return jsonify({'error': 'Jogador não encontrado'}), 404
     data = request.json
     
     if not data:
@@ -171,7 +189,9 @@ def update_player(player_id):
     
     # Validar se telefone já existe em outro jogador
     if 'phone' in data and data['phone'] != player.phone:
-        existing_player = Player.query.filter_by(phone=data['phone']).first()
+        existing_player = Player.query.filter(
+            and_(Player.phone == data['phone'], Player.user_id == current_user_id)
+        ).first()
         if existing_player:
             raise ValidationError(
                 "Já existe um jogador com este telefone",
@@ -203,7 +223,12 @@ def activate_player(player_id):
     """
     Ativa um jogador
     """
-    player = Player.query.get_or_404(player_id)
+    current_user_id = str(get_jwt_identity())
+    player = Player.query.filter(
+        and_(Player.id == player_id, Player.user_id == current_user_id)
+    ).first()
+    if not player:
+        return jsonify({'error': 'Jogador não encontrado'}), 404
     
     if player.status == 'active':
         raise ValidationError("Jogador já está ativo")
@@ -227,7 +252,12 @@ def deactivate_player(player_id):
     """
     Desativa um jogador
     """
-    player = Player.query.get_or_404(player_id)
+    current_user_id = str(get_jwt_identity())
+    player = Player.query.filter(
+        and_(Player.id == player_id, Player.user_id == current_user_id)
+    ).first()
+    if not player:
+        return jsonify({'error': 'Jogador não encontrado'}), 404
     
     if player.status == 'inactive':
         raise ValidationError("Jogador já está inativo")
@@ -251,10 +281,17 @@ def delete_player(player_id):
     """
     Remove um jogador (soft delete)
     """
-    player = Player.query.get_or_404(player_id)
+    current_user_id = str(get_jwt_identity())
+    player = Player.query.filter(
+        and_(Player.id == player_id, Player.user_id == current_user_id)
+    ).first()
+    if not player:
+        return jsonify({'error': 'Jogador não encontrado'}), 404
     
     # Verificar se jogador tem pagamentos associados
-    has_payments = MonthlyPlayer.query.filter_by(player_id=player_id).first()
+    has_payments = MonthlyPlayer.query.filter(
+        and_(MonthlyPlayer.player_id == player_id, MonthlyPlayer.user_id == current_user_id)
+    ).first()
     if has_payments:
         raise ValidationError(
             "Não é possível excluir jogador com pagamentos associados",
@@ -290,7 +327,8 @@ def get_monthly_payments():
     per_page = min(int(request.args.get('per_page', 20)), 100)
 
     # Buscar períodos com filtros e paginação
-    period_query = db.session.query(MonthlyPeriod)
+    current_user_id = str(get_jwt_identity())
+    period_query = db.session.query(MonthlyPeriod).filter(MonthlyPeriod.user_id == current_user_id)
     if year:
         period_query = period_query.filter(MonthlyPeriod.year == year)
     if month:
@@ -302,7 +340,9 @@ def get_monthly_payments():
     aggregated = []
     for period in periods_paginated.items:
         # Jogadores mensais do período (aplicar filtros opcionais)
-        mp_query = db.session.query(MonthlyPlayer).filter(MonthlyPlayer.monthly_period_id == period.id)
+        mp_query = db.session.query(MonthlyPlayer).filter(
+            and_(MonthlyPlayer.monthly_period_id == period.id, MonthlyPlayer.user_id == current_user_id)
+        )
         if player_id:
             mp_query = mp_query.filter(MonthlyPlayer.player_id == player_id)
         if status:
@@ -315,7 +355,9 @@ def get_monthly_payments():
         monthly_players_data = mp_schema.dump(monthly_players)
 
         # Jogadores avulsos do período
-        casual_players = db.session.query(CasualPlayer).filter(CasualPlayer.monthly_period_id == period.id).all()
+        casual_players = db.session.query(CasualPlayer).filter(
+            and_(CasualPlayer.monthly_period_id == period.id, CasualPlayer.user_id == current_user_id)
+        ).all()
         casual_players_data = []
         for cp in casual_players:
             casual_players_data.append({
@@ -371,7 +413,12 @@ def update_monthly_player_custom_fee(monthly_player_id):
     """
     Atualiza a taxa mensal customizada de um jogador para um período específico
     """
-    monthly_player = MonthlyPlayer.query.get_or_404(monthly_player_id)
+    current_user_id = str(get_jwt_identity())
+    monthly_player = MonthlyPlayer.query.filter(
+        and_(MonthlyPlayer.id == monthly_player_id, MonthlyPlayer.user_id == current_user_id)
+    ).first()
+    if not monthly_player:
+        return jsonify({'error': 'Pagamento mensal não encontrado'}), 404
     data = request.json
     
     if not data:
@@ -398,7 +445,9 @@ def update_monthly_player_custom_fee(monthly_player_id):
         db.func.sum(
             db.func.coalesce(MonthlyPlayer.custom_monthly_fee, MonthlyPlayer.monthly_fee)
         )
-    ).filter(MonthlyPlayer.monthly_period_id == period.id).scalar() or 0
+    ).filter(
+        and_(MonthlyPlayer.monthly_period_id == period.id, MonthlyPlayer.user_id == current_user_id)
+    ).scalar() or 0
     
     period.total_expected = total_expected
     
@@ -425,19 +474,24 @@ def create_monthly_payment():
         schema = MonthlyPaymentCreateSchema()
         data = schema.load(request.json)
         
-        # Verificar se já existe período para o mês/ano
+        current_user_id = str(get_jwt_identity())
+
+        # Verificar se já existe período para o mês/ano deste usuário
         existing_period = MonthlyPeriod.query.filter(
             and_(
                 MonthlyPeriod.year == data['year'],
-                MonthlyPeriod.month == data['month']
+                MonthlyPeriod.month == data['month'],
+                MonthlyPeriod.user_id == current_user_id
             )
         ).first()
         
         if existing_period:
             return jsonify({'error': 'Já existe um período para este mês/ano'}), 400
         
-        # Buscar todos os jogadores ativos
-        active_players = Player.query.filter(Player.is_active == True).all()
+        # Buscar todos os jogadores ativos do usuário
+        active_players = Player.query.filter(
+            and_(Player.is_active == True, Player.user_id == current_user_id)
+        ).all()
         
         if not active_players:
             return jsonify({'error': 'Não há jogadores ativos para criar o período mensal'}), 400
@@ -454,7 +508,8 @@ def create_monthly_payment():
             total_expected=total_expected,
             total_received=0,
             players_count=len(active_players),
-            is_active=True
+            is_active=True,
+            user_id=current_user_id
         )
         
         db.session.add(period)
@@ -474,7 +529,8 @@ def create_monthly_payment():
                 monthly_fee=player.monthly_fee,
                 join_date=player.join_date,
                 status=PaymentStatus.PENDING.value,
-                pending_months_count=0
+                pending_months_count=0,
+                user_id=current_user_id
             )
             db.session.add(monthly_player)
             monthly_players_created += 1
@@ -545,11 +601,34 @@ def get_player_stats():
     Retorna estatísticas dos jogadores
     """
     try:
+        # Escopo por usuário autenticado
+        current_user_id = str(get_jwt_identity())
+
+        # Contagens por status restritas ao usuário
+        active_count = Player.query.filter(
+            and_(Player.user_id == current_user_id, Player.status == 'active')
+        ).count()
+
+        inactive_count = Player.query.filter(
+            and_(Player.user_id == current_user_id, Player.status == 'inactive')
+        ).count()
+
+        pending_count = Player.query.filter(
+            and_(Player.user_id == current_user_id, Player.status == 'pending')
+        ).count()
+
+        delayed_count = Player.query.filter(
+            and_(Player.user_id == current_user_id, Player.status == 'delayed')
+        ).count()
+
+        total_count = Player.query.filter(Player.user_id == current_user_id).count()
+
         stats = {
-            'active': Player.query.filter_by(status='active').count(),
-            'inactive': Player.query.filter_by(status='inactive').count(),
-            'pending': Player.query.filter_by(status='pending').count(),
-            'total': Player.query.count()
+            'active': active_count,
+            'inactive': inactive_count,
+            'pending': pending_count,
+            'delayed': delayed_count,
+            'total': total_count
         }
         
         return jsonify(stats), 200
@@ -604,7 +683,10 @@ def get_monthly_periods():
     Lista todos os períodos mensais
     """
     try:
-        periods = MonthlyPeriod.query.order_by(MonthlyPeriod.year.desc(), MonthlyPeriod.month.desc()).all()
+        current_user_id = str(get_jwt_identity())
+        periods = MonthlyPeriod.query.filter(
+            MonthlyPeriod.user_id == current_user_id
+        ).order_by(MonthlyPeriod.year.desc(), MonthlyPeriod.month.desc()).all()
         
         result = []
         for period in periods:
@@ -634,7 +716,10 @@ def get_monthly_period(period_id):
     Busca um período mensal específico
     """
     try:
-        period = MonthlyPeriod.query.get(period_id)
+        current_user_id = str(get_jwt_identity())
+        period = MonthlyPeriod.query.filter(
+            and_(MonthlyPeriod.id == period_id, MonthlyPeriod.user_id == current_user_id)
+        ).first()
         
         if not period:
             return jsonify({'error': 'Período não encontrado'}), 404
@@ -665,8 +750,11 @@ def add_players_to_monthly_period(period_id):
     Adiciona jogadores selecionados a um período mensal
     """
     try:
-        # Verificar se o período existe
-        period = MonthlyPeriod.query.get(period_id)
+        # Verificar se o período existe e pertence ao usuário
+        current_user_id = str(get_jwt_identity())
+        period = MonthlyPeriod.query.filter(
+            and_(MonthlyPeriod.id == period_id, MonthlyPeriod.user_id == current_user_id)
+        ).first()
         if not period:
             return jsonify({'error': 'Período não encontrado'}), 404
         
@@ -679,8 +767,10 @@ def add_players_to_monthly_period(period_id):
         if not isinstance(player_ids, list) or len(player_ids) == 0:
             return jsonify({'error': 'Lista de player_ids deve conter pelo menos um ID'}), 400
         
-        # Buscar jogadores válidos
-        players = Player.query.filter(Player.id.in_(player_ids)).all()
+        # Buscar jogadores válidos do usuário
+        players = Player.query.filter(
+            and_(Player.id.in_(player_ids), Player.user_id == current_user_id)
+        ).all()
         if len(players) != len(player_ids):
             return jsonify({'error': 'Um ou mais jogadores não foram encontrados'}), 400
         
@@ -688,7 +778,8 @@ def add_players_to_monthly_period(period_id):
         existing_players = MonthlyPlayer.query.filter(
             and_(
                 MonthlyPlayer.monthly_period_id == period_id,
-                MonthlyPlayer.player_id.in_(player_ids)
+                MonthlyPlayer.player_id.in_(player_ids),
+                MonthlyPlayer.user_id == current_user_id
             )
         ).all()
         
@@ -713,7 +804,8 @@ def add_players_to_monthly_period(period_id):
                 email=player.email or '',
                 monthly_fee=player.monthly_fee,
                 join_date=player.join_date,
-                status='pending'
+                status='pending',
+                user_id=current_user_id
             )
             db.session.add(monthly_player)
             created_players.append(monthly_player)
@@ -721,7 +813,9 @@ def add_players_to_monthly_period(period_id):
         
         # Atualizar totais do período
         period.total_expected += total_expected_increase
-        period.players_count = MonthlyPlayer.query.filter_by(monthly_period_id=period_id).count() + len(created_players)
+        period.players_count = MonthlyPlayer.query.filter(
+            and_(MonthlyPlayer.monthly_period_id == period_id, MonthlyPlayer.user_id == current_user_id)
+        ).count() + len(created_players)
         
         db.session.commit()
         
@@ -743,13 +837,18 @@ def get_monthly_period_players(period_id):
     Lista jogadores de um período mensal específico
     """
     try:
-        # Verificar se o período existe
-        period = MonthlyPeriod.query.get(period_id)
+        # Verificar se o período existe e pertence ao usuário
+        current_user_id = str(get_jwt_identity())
+        period = MonthlyPeriod.query.filter(
+            and_(MonthlyPeriod.id == period_id, MonthlyPeriod.user_id == current_user_id)
+        ).first()
         if not period:
             return jsonify({'error': 'Período não encontrado'}), 404
         
-        # Buscar jogadores do período
-        monthly_players = MonthlyPlayer.query.filter_by(monthly_period_id=period_id).all()
+        # Buscar jogadores do período do usuário
+        monthly_players = MonthlyPlayer.query.filter(
+            and_(MonthlyPlayer.monthly_period_id == period_id, MonthlyPlayer.user_id == current_user_id)
+        ).all()
         
         result = []
         for mp in monthly_players:
@@ -795,13 +894,18 @@ def get_monthly_period_casual_players(period_id):
     Lista jogadores casuais de um período mensal específico
     """
     try:
-        # Verificar se o período existe
-        period = MonthlyPeriod.query.get(period_id)
+        # Verificar se o período existe e pertence ao usuário
+        current_user_id = str(get_jwt_identity())
+        period = MonthlyPeriod.query.filter(
+            and_(MonthlyPeriod.id == period_id, MonthlyPeriod.user_id == current_user_id)
+        ).first()
         if not period:
             return jsonify({'error': 'Período não encontrado'}), 404
         
-        # Buscar jogadores casuais do período
-        casual_players = CasualPlayer.query.filter_by(monthly_period_id=period_id).all()
+        # Buscar jogadores casuais do período do usuário
+        casual_players = CasualPlayer.query.filter(
+            and_(CasualPlayer.monthly_period_id == period_id, CasualPlayer.user_id == current_user_id)
+        ).all()
         
         result = []
         for cp in casual_players:
@@ -831,13 +935,18 @@ def get_monthly_period_expenses(period_id):
     Lista despesas de um período mensal específico
     """
     try:
-        # Verificar se o período existe
-        period = MonthlyPeriod.query.get(period_id)
+        # Verificar se o período existe e pertence ao usuário
+        current_user_id = str(get_jwt_identity())
+        period = MonthlyPeriod.query.filter(
+            and_(MonthlyPeriod.id == period_id, MonthlyPeriod.user_id == current_user_id)
+        ).first()
         if not period:
             return jsonify({'error': 'Período não encontrado'}), 404
         
-        # Buscar despesas do período
-        expenses = Expense.query.filter_by(monthly_period_id=period_id).all()
+        # Buscar despesas do período do usuário
+        expenses = Expense.query.filter(
+            and_(Expense.monthly_period_id == period_id, Expense.user_id == current_user_id)
+        ).all()
         
         result = []
         for expense in expenses:

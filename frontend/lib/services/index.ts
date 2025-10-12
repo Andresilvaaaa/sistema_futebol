@@ -36,6 +36,7 @@ export type {
   PlayersFilters,
   MonthlyPaymentsFilters,
   PaginatedResponse,
+  ApiPlayerStats,
   PlayerStats,
   PaymentStats,
   ApiErrorResponse

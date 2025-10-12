@@ -7,6 +7,7 @@ import { api } from '../api';
 import { 
   PlayerStats,
   PaymentStats,
+  ApiPlayerStats,
   API_ENDPOINTS 
 } from '../../types/api';
 
@@ -18,10 +19,26 @@ export class StatsService {
    */
   static async getPlayerStats(): Promise<PlayerStats> {
     try {
-      const response = await api.get<PlayerStats>(
+      const response = await api.get<ApiPlayerStats>(
         API_ENDPOINTS.playerStats()
       );
-      return response;
+      // Mapear formato da API para formato interno
+      const apiStats = (response as any).data ? (response as any).data as ApiPlayerStats : (response as ApiPlayerStats);
+      const mapped: PlayerStats = {
+        total_players: Number(apiStats.total ?? 0),
+        active_players: Number(apiStats.active ?? 0),
+        inactive_players: Number(apiStats.inactive ?? 0),
+        pending_players: Number((apiStats as any).pending ?? 0),
+        delayed_players: Number((apiStats as any).delayed ?? 0),
+        // players_by_position não é retornado por este endpoint atualmente
+        players_by_position: undefined,
+      };
+      // Se a resposta estiver no formato StandardApiResponse
+      if ((response as any)?.success) {
+        return mapped;
+      }
+      // Compatibilidade com formato antigo direto
+      return mapped;
     } catch (error) {
       console.error('Erro ao buscar estatísticas dos jogadores:', error);
       throw error;
@@ -165,11 +182,12 @@ export class StatsService {
   static async getPositionStats() {
     try {
       const playerStats = await this.getPlayerStats();
-      
-      return Object.entries(playerStats.players_by_position).map(([position, count]) => ({
+      const byPos = playerStats.players_by_position || {};
+      const total = playerStats.total_players || 0;
+      return Object.entries(byPos).map(([position, count]) => ({
         position,
         count,
-        percentage: (count / playerStats.total_players) * 100
+        percentage: total > 0 ? (Number(count) / total) * 100 : 0
       }));
     } catch (error) {
       console.error('Erro ao buscar estatísticas por posição:', error);
