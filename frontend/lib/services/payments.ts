@@ -27,17 +27,28 @@ export class PaymentsService {
    */
   async getMonthlyPeriods(filters?: { year?: number; month?: number }): Promise<PaginatedApiResponse<MonthlyPeriod>> {
     try {
-      const response = await api.get<StandardApiResponse<MonthlyPeriod[]>>(
+      const response = await api.get<StandardApiResponse<MonthlyPeriod[]> | MonthlyPeriod[]>(
         this.baseEndpoint,
         filters
       );
 
-      // A API agora retorna uma resposta padronizada com {success, data, message}
-      // Adaptamos para o formato paginado esperado pelo frontend
-      const standardResponse = response as StandardApiResponse<MonthlyPeriod[]>;
-      this.validateStandardResponse(standardResponse);
-      
-      const periods = standardResponse.data || [];
+      // Backend pode retornar resposta padronizada ou array simples; tratar ambos.
+      let periods: MonthlyPeriod[] = [];
+      let message: string | undefined;
+      let timestamp: string | undefined;
+
+      if (response && typeof response === 'object' && 'success' in (response as any)) {
+        const standardResponse = response as StandardApiResponse<MonthlyPeriod[]>;
+        this.validateStandardResponse(standardResponse);
+        periods = standardResponse.data || [];
+        message = standardResponse.message;
+        timestamp = (standardResponse as any).timestamp;
+      } else if (Array.isArray(response)) {
+        periods = response as MonthlyPeriod[];
+      } else {
+        throw new ApiException('Resposta inválida ao listar períodos mensais', 500, response as any);
+      }
+
       const normalized = periods.map((p) => ({
         ...p,
         year: toNum(p.year),
@@ -50,7 +61,8 @@ export class PaymentsService {
       return {
         success: true,
         data: normalized,
-        message: standardResponse.message,
+        message,
+        timestamp,
         pagination: {
           page: 1,
           pages: 1,

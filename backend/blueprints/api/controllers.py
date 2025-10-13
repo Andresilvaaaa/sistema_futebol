@@ -128,6 +128,7 @@ def create_player():
         name=data['name'].strip(),
         phone=data['phone'].strip(),
         position=data.get('position', '').strip(),
+        email=(data.get('email').strip() if data.get('email') else None),
         status='active',
         user_id=current_user_id
     )
@@ -199,10 +200,11 @@ def update_player(player_id):
             )
     
     # Atualizar campos permitidos
-    updatable_fields = ['name', 'phone', 'position']
+    updatable_fields = ['name', 'phone', 'position', 'email']
     for field in updatable_fields:
         if field in data:
-            setattr(player, field, data[field].strip() if isinstance(data[field], str) else data[field])
+            value = data[field]
+            setattr(player, field, value.strip() if isinstance(value, str) else value)
     
     db.session.commit()
     
@@ -488,9 +490,9 @@ def create_monthly_payment():
         if existing_period:
             return jsonify({'error': 'Já existe um período para este mês/ano'}), 400
         
-        # Buscar todos os jogadores ativos do usuário
+        # Buscar todos os jogadores ativos do usuário (consistência: filtrar por status)
         active_players = Player.query.filter(
-            and_(Player.is_active == True, Player.user_id == current_user_id)
+            and_(Player.status == 'active', Player.user_id == current_user_id)
         ).all()
         
         if not active_players:
@@ -525,7 +527,8 @@ def create_monthly_payment():
                 player_name=player.name,
                 position=player.position,
                 phone=player.phone,
-                email=player.email,
+                # Garantir que email não seja nulo para atender a restrição atual
+                email=(player.email or ''),
                 monthly_fee=player.monthly_fee,
                 join_date=player.join_date,
                 status=PaymentStatus.PENDING.value,
@@ -557,7 +560,15 @@ def update_payment(payment_id):
     Atualiza o status de pagamento de um jogador
     """
     try:
-        payment = MonthlyPlayer.query.get_or_404(payment_id)
+        # Escopo por usuário autenticado
+        current_user_id = str(get_jwt_identity())
+
+        # Garantir que o pagamento pertence ao usuário
+        payment = MonthlyPlayer.query.filter(
+            and_(MonthlyPlayer.id == payment_id, MonthlyPlayer.user_id == current_user_id)
+        ).first()
+        if not payment:
+            return jsonify({'error': 'Pagamento mensal não encontrado'}), 404
         
         data = request.json
         payment_date = data.get('payment_date')
@@ -570,13 +581,21 @@ def update_payment(payment_id):
         else:
             payment.payment_date = datetime.utcnow()
         
-        # Atualizar total recebido do período
-        period = MonthlyPeriod.query.get(payment.monthly_period_id)
+        # Atualizar total recebido do período (escopo por usuário)
+        period = MonthlyPeriod.query.filter(
+            and_(MonthlyPeriod.id == payment.monthly_period_id, MonthlyPeriod.user_id == current_user_id)
+        ).first()
+        if not period:
+            return jsonify({'error': 'Período não encontrado'}), 404
+
         period.total_received = db.session.query(
-            db.func.sum(MonthlyPlayer.monthly_fee)
+            db.func.sum(
+                db.func.coalesce(MonthlyPlayer.custom_monthly_fee, MonthlyPlayer.monthly_fee)
+            )
         ).filter(
             and_(
                 MonthlyPlayer.monthly_period_id == period.id,
+                MonthlyPlayer.user_id == current_user_id,
                 MonthlyPlayer.status == 'paid'
             )
         ).scalar() or 0
@@ -644,19 +663,25 @@ def get_payment_stats(year, month):
     Retorna estatísticas de pagamentos para um mês específico
     """
     try:
-        # Buscar período
+        # Escopo por usuário autenticado
+        current_user_id = str(get_jwt_identity())
+
+        # Buscar período do usuário
         period = MonthlyPeriod.query.filter(
             and_(
                 MonthlyPeriod.year == year,
-                MonthlyPeriod.month == month
+                MonthlyPeriod.month == month,
+                MonthlyPeriod.user_id == current_user_id
             )
         ).first()
         
         if not period:
             return jsonify({'error': 'Período não encontrado'}), 404
         
-        # Calcular estatísticas
-        payments = MonthlyPlayer.query.filter_by(monthly_period_id=period.id).all()
+        # Calcular estatísticas restritas ao usuário
+        payments = MonthlyPlayer.query.filter(
+            and_(MonthlyPlayer.monthly_period_id == period.id, MonthlyPlayer.user_id == current_user_id)
+        ).all()
         
         stats = {
             'total_players': len(payments),
@@ -887,6 +912,86 @@ def get_monthly_period_players(period_id):
         return jsonify({'error': f'Erro ao buscar jogadores do período: {str(e)}'}), 500
 
 
+@api_bp.route('/monthly-periods/<period_id>/available-players', methods=['GET'])
+@jwt_required()
+@handle_api_error
+def get_available_players_for_period(period_id):
+    """
+    Lista jogadores disponíveis para importação em um período (não ainda adicionados ao período).
+    Retorna resposta padronizada: { success, data, message }.
+    """
+    try:
+        current_user_id = str(get_jwt_identity())
+
+        # Verificar existência do período pertencente ao usuário
+        period = MonthlyPeriod.query.filter(
+            and_(MonthlyPeriod.id == period_id, MonthlyPeriod.user_id == current_user_id)
+        ).first()
+        if not period:
+            raise ValidationError('Período não encontrado')
+
+        # IDs de jogadores já no período
+        existing_player_ids = [mp.player_id for mp in MonthlyPlayer.query.filter(
+            and_(MonthlyPlayer.monthly_period_id == period_id, MonthlyPlayer.user_id == current_user_id)
+        ).all()]
+
+        # Jogadores ativos do usuário que não estão no período
+        available_players_query = Player.query.filter(
+            and_(
+                Player.user_id == current_user_id,
+                Player.status == 'active',
+                ~Player.id.in_(existing_player_ids) if existing_player_ids else True
+            )
+        )
+
+        available_players = available_players_query.all()
+
+        # Formatar dados conforme esperado pelo frontend (campos do Player)
+        formatted = []
+        for p in available_players:
+            formatted.append({
+                'id': p.id,
+                'name': p.name,
+                'position': p.position,
+                'phone': p.phone or '',
+                'email': p.email or '',
+                'monthly_fee': float(p.monthly_fee) if p.monthly_fee is not None else 0.0,
+                'join_date': p.join_date.isoformat() if p.join_date else None,
+                'status': p.status,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+                'updated_at': p.updated_at.isoformat() if p.updated_at else None
+            })
+
+        return APIResponse.success(
+            data=formatted,
+            message=f'Encontrados {len(formatted)} jogadores disponíveis para importação'
+        )
+    except ValidationError:
+        # será tratado por handle_api_error
+        raise
+    except Exception as e:
+        raise ValidationError(f'Erro ao buscar jogadores disponíveis: {str(e)}')
+
+
+# Explicit OPTIONS handler to satisfy CORS preflight for this endpoint
+@api_bp.route('/monthly-periods/<period_id>/available-players', methods=['OPTIONS'])
+def options_available_players(period_id):
+    from flask import current_app
+    # Return a simple OK with CORS headers handled by Flask-CORS
+    return (
+        jsonify({
+            'success': True,
+            'message': 'Preflight OK',
+        }),
+        200,
+        {
+            'Access-Control-Allow-Origin': current_app.config.get('CORS_ORIGINS', ['http://localhost:3000'])[0],
+            'Access-Control-Allow-Headers': ', '.join(current_app.config.get('CORS_ALLOW_HEADERS', ['Content-Type', 'Authorization'])),
+            'Access-Control-Allow-Methods': ', '.join(current_app.config.get('CORS_METHODS', ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])),
+        }
+    )
+
+
 @api_bp.route('/monthly-periods/<period_id>/casual-players', methods=['GET'])
 @jwt_required()
 def get_monthly_period_casual_players(period_id):
@@ -956,7 +1061,8 @@ def get_monthly_period_expenses(period_id):
                 'description': expense.description,
                 'amount': float(expense.amount),
                 'category': expense.category,
-                'expense_date': expense.expense_date.isoformat(),
+                # O modelo usa campo 'date'; expor como 'expense_date' na resposta
+                'expense_date': expense.date.isoformat(),
                 'created_at': expense.created_at.isoformat(),
                 'updated_at': expense.updated_at.isoformat()
             })

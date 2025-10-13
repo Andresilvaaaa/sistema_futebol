@@ -33,7 +33,18 @@ export function ImportPlayersDialog({
     if (open) {
       console.log('🔍 [ImportPlayersDialog] Modal aberto, carregando jogadores...')
       console.log('🔍 [ImportPlayersDialog] monthlyPeriodId:', monthlyPeriodId)
+      // Evitar chamada se não houver período válido
+      if (!monthlyPeriodId || monthlyPeriodId.trim().length === 0) {
+        console.warn('⚠️ [ImportPlayersDialog] monthlyPeriodId ausente; não buscando jogadores.')
+        setPlayers([])
+        setSelectedPlayers(new Set())
+        return
+      }
       fetchPlayers()
+    }
+    // Ao fechar, limpar seleção para evitar estados antigos
+    if (!open) {
+      setSelectedPlayers(new Set())
     }
   }, [open])
 
