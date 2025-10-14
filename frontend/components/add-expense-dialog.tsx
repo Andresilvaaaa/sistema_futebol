@@ -41,17 +41,41 @@ export function AddExpenseDialog({ onAddExpense }: AddExpenseDialogProps) {
     e.preventDefault()
 
     // Validate required fields
-    if (!formData.description || !formData.amount || !formData.category) {
+    if (!formData.description || !formData.amount || !formData.category || !formData.date) {
       alert('Por favor, preencha todos os campos obrigatórios.')
       return
     }
 
-    const expense: CreateExpenseRequest = {
-      description: formData.description.trim(),
-      amount: Number.parseFloat(formData.amount.replace(',', '.')),
-      category: formData.category,
-      expense_date: formData.date, // Passa a data como string, o serviço fará a conversão
+    // Parse and validate date format
+    let parsedDate: string
+  try {
+    const dateInput = formData.date.trim()
+    if (dateInput.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+      // DD/MM/YYYY format
+      const [day, month, year] = dateInput.split('/')
+      parsedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    } else if (dateInput.match(/^\d{2}\/\d{2}\/\d{2}$/)) {
+      // DD/MM/YY format
+      const [day, month, year] = dateInput.split('/')
+      const fullYear = parseInt(year) < 50 ? `20${year}` : `19${year}`
+      parsedDate = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    } else {
+      throw new Error('Invalid date format')
     }
+  } catch {
+    alert('Formato de data inválido. Use DD/MM/YYYY ou DD/MM/YY.')
+    return
+  }
+
+  // Permitir datas futuras: manter apenas validação de formato acima.
+
+  const expense: CreateExpenseRequest = {
+    description: formData.description.trim(),
+    amount: Number.parseFloat(formData.amount.replace(',', '.')),
+    category: formData.category,
+    expense_date: parsedDate,
+    notes: formData.notes.trim() || undefined,
+  }
 
     // Checagem adicional para evitar NaN ou valores inválidos
     if (isNaN(expense.amount) || expense.amount <= 0) {

@@ -83,8 +83,13 @@ export default function MonthlyPage() {
       setMonthlyPeriods([period])
 
       // Buscar jogadores do período
+      console.log('🔍 [MonthlyPage] Buscando jogadores para período:', period.id)
       const playersResp = await paymentsService.getMonthlyPlayers(period.id, { page: 1, per_page: 100 })
+      console.log('🔍 [MonthlyPage] Resposta completa do getMonthlyPlayers:', JSON.stringify(playersResp, null, 2))
       const playersApi = playersResp.data || []
+      console.log('🔍 [MonthlyPage] Dados dos jogadores recebidos:', playersApi)
+      console.log('🔍 [MonthlyPage] Quantidade de jogadores:', playersApi.length)
+      
       const players: MonthlyPlayer[] = playersApi.map(p => ({
         id: p.id,
         playerId: p.player_id,
@@ -99,6 +104,7 @@ export default function MonthlyPage() {
         joinDate: p.join_date,
         pendingMonthsCount: p.pending_months_count,
       }))
+      console.log('🔍 [MonthlyPage] Jogadores processados:', players)
       setMonthlyPlayers(players)
 
       // Buscar jogadores avulsos
@@ -253,11 +259,11 @@ export default function MonthlyPage() {
       const result = await paymentsService.addPlayersToMonthlyPeriod(currentPeriod.id, { player_ids: playerIds })
       
       console.log('✅ [MonthlyPage] Resultado da API:', result)
-      console.log('✅ [MonthlyPage] Jogadores adicionados:', result.data?.length || 0)
+      console.log('✅ [MonthlyPage] Jogadores adicionados:', result.data?.added_players || 0)
       console.log('✅ [MonthlyPage] Mensagem da API:', result.message)
       
       // Verificar se a resposta contém dados válidos
-      const playersAdded = result.data?.length || 0
+      const playersAdded = result.data?.added_players || 0
       
       if (playersAdded > 0) {
         toast({
@@ -734,7 +740,7 @@ export default function MonthlyPage() {
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium mb-2">Período não encontrado</h3>
                 <p className="text-muted-foreground mb-4">
-                  Crie o período mensal para {formatMonthYear(currentMonth, currentYear)} para começar a gerenciar os pagamentos.
+                  Crie o período mensal para {formatMonthYear(currentMonth, currentYear)} para começar a gerenciar os pagamentos mensais.
                 </p>
                 <Button 
                   onClick={handleCreateMonth}

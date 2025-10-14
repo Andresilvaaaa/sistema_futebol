@@ -136,15 +136,12 @@ class ExpenseCreateSchema(Schema):
         'equipment', 'field_rental', 'referee', 'transportation', 
         'food', 'medical', 'maintenance', 'other'
     ]))
-    expense_date = fields.DateTime(required=True)
+    expense_date = fields.Date(required=True)  # Mudança: Date em vez de DateTime
     paid_by = fields.Str(validate=validate.Length(max=100), allow_none=True)
     receipt_url = fields.Url(allow_none=True)
     notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
-    
-    @validates('expense_date')
-    def validate_expense_date(self, value):
-        if value > datetime.now():
-            raise ValidationError('Data da despesa não pode ser no futuro')
+    # Permitir datas futuras para possibilitar planejamento e conciliação de fluxo de caixa
+    # Mantemos apenas validação de formato via fields.Date acima
 
 
 class ExpenseUpdateSchema(Schema):
@@ -155,15 +152,11 @@ class ExpenseUpdateSchema(Schema):
         'equipment', 'field_rental', 'referee', 'transportation', 
         'food', 'medical', 'maintenance', 'other'
     ]))
-    expense_date = fields.DateTime()
+    expense_date = fields.Date()  # Mudança: Date em vez de DateTime
     paid_by = fields.Str(validate=validate.Length(max=100), allow_none=True)
     receipt_url = fields.Url(allow_none=True)
     notes = fields.Str(validate=validate.Length(max=500), allow_none=True)
-    
-    @validates('expense_date')
-    def validate_expense_date(self, value):
-        if value and value > datetime.now():
-            raise ValidationError('Data da despesa não pode ser no futuro')
+    # Permitir datas futuras também em atualização
 
 
 class ExpenseResponseSchema(Schema):
@@ -172,7 +165,7 @@ class ExpenseResponseSchema(Schema):
     description = fields.Str()
     amount = fields.Decimal(as_string=True)
     category = fields.Str()
-    expense_date = fields.DateTime()
+    expense_date = fields.Date()  # Mudança: Date em vez de DateTime
     paid_by = fields.Str()
     receipt_url = fields.Str()
     notes = fields.Str()

@@ -371,31 +371,7 @@ def create_test_app():
             'data': period
         }), 201
     
-    @api_bp.route('/monthly-payments/monthly-players/<int:monthly_player_id>/payment-status', methods=['PATCH', 'PUT'])
-    def update_payment_status(monthly_player_id):
-        """Endpoint de teste para atualizar status de pagamento"""
-        monthly_player = next((p for p in test_data['monthly_players'] if p['id'] == monthly_player_id), None)
-        if not monthly_player:
-            return jsonify({'success': False, 'error': 'Pagamento não encontrado'}), 404
-        
-        data = request.get_json()
-        monthly_player['payment_status'] = data.get('payment_status', 'paid')
-        
-        # Atualizar no banco
-        try:
-            MonthlyPlayer = current_app.test_models['MonthlyPlayer']
-            db = current_app.test_db
-            db_mp = db.session.query(MonthlyPlayer).get(monthly_player_id)
-            if db_mp:
-                db_mp.payment_status = monthly_player['payment_status']
-                db.session.commit()
-        except Exception:
-            pass
-        
-        return jsonify({
-            'success': True,
-            'data': monthly_player
-        })
+
 
     @api_bp.route('/monthly-payments/monthly-players/<int:monthly_player_id>/custom-fee', methods=['PATCH', 'PUT'])
     def update_custom_fee(monthly_player_id):

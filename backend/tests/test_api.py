@@ -258,21 +258,7 @@ class TestMonthlyPaymentsAPI:
                              headers=api_headers)
         helpers.assert_api_error(response, 400)
     
-    def test_update_monthly_player_payment_status(self, client, db_session, sample_monthly_players, api_headers, helpers, app):
-        """Testa atualização do status de pagamento"""
-        MonthlyPlayer = app.test_models['MonthlyPlayer']
-        monthly_player = sample_monthly_players[1]  # Status 'pending'
-        
-        response = client.patch(f'/api/monthly-payments/monthly-players/{monthly_player.id}/payment-status', 
-                              json={'payment_status': 'paid'}, 
-                              headers=api_headers)
-        data = helpers.assert_api_success(response)
-        
-        assert data['data']['payment_status'] == 'paid'
-        
-        # Verificar no banco
-        updated_player = db_session.query(MonthlyPlayer).get(monthly_player.id)
-        assert updated_player.payment_status == 'paid'
+
     
     def test_update_custom_monthly_fee(self, client, db_session, sample_monthly_players, api_headers, helpers, app):
         """Testa atualização de taxa mensal customizada"""

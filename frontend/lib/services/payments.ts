@@ -246,51 +246,113 @@ export class PaymentsService {
   /**
    * Busca jogadores de um período mensal específico
    */
-  async getMonthlyPlayers(periodId: string): Promise<PaginatedApiResponse<MonthlyPlayer>> {
+  async getMonthlyPlayers(periodId: string, params?: { page?: number; per_page?: number }): Promise<PaginatedApiResponse<MonthlyPlayer>> {
     console.log('[PaymentsService] getMonthlyPlayers - INÍCIO');
     console.log('[PaymentsService] periodId:', periodId);
+    console.log('[PaymentsService] params:', params);
+
+    if (!periodId) {
+      throw new Error('Period ID é obrigatório');
+    }
+
+    const endpoint = `/api/monthly-periods/${periodId}/players`;
+    console.log('[PaymentsService] Endpoint da API:', endpoint);
+
+    console.log('[PaymentsService] Chamando api.get...');
+    const response = await api.get(endpoint, { params });
+    console.log('[PaymentsService] Resposta da API recebida:', response);
+    console.log('[PaymentsService] Tipo da resposta:', typeof response);
+    console.log('[PaymentsService] É array?:', Array.isArray(response));
+    console.log('[PaymentsService] Tamanho se for array:', Array.isArray(response) ? response.length : 'N/A');
+    console.log('[PaymentsService] JSON.stringify da resposta:', JSON.stringify(response, null, 2));
     
-    if (!periodId?.trim()) {
-      console.error('[PaymentsService] Erro: ID do período é obrigatório');
-      throw new ApiException('ID do período é obrigatório', 400);
+    // Log detalhado do primeiro item se existir
+    if (Array.isArray(response) && response.length > 0) {
+      console.log('[PaymentsService] PRIMEIRO ITEM DETALHADO:', JSON.stringify(response[0], null, 2));
+      console.log('[PaymentsService] Chaves do primeiro item:', Object.keys(response[0]));
     }
-
-    try {
-      const endpoint = `/api/monthly-periods/${periodId}/players`;
-      console.log('[PaymentsService] Endpoint da API:', endpoint);
+    
+    // Se a resposta for um array diretamente, precisamos adaptá-la
+    if (Array.isArray(response)) {
+      console.log('[PaymentsService] Resposta é array direto, adaptando...');
+      console.log('[PaymentsService] Tamanho do array:', response.length);
       
-      console.log('[PaymentsService] Chamando api.get...');
-      const response = await api.get<StandardApiResponse<MonthlyPlayer[]>>(endpoint);
-      console.log('[PaymentsService] Resposta da API recebida:', response);
-
-      // Adaptar resposta padronizada para formato paginado
-      const data = response.data || [];
-      const normalized = data.map((p) => ({
-        ...p,
-        monthly_fee: toNum(p.monthly_fee),
-        custom_monthly_fee: p.custom_monthly_fee !== undefined ? toNum(p.custom_monthly_fee) : undefined,
-        effective_monthly_fee: toNum(p.effective_monthly_fee),
-        amount_paid: toNum(p.amount_paid),
-        pending_months_count: toNum(p.pending_months_count),
-      }));
-
-      return {
-        success: true,
-        message: response.message || 'Jogadores carregados com sucesso',
-        timestamp: response.timestamp,
-        data: normalized,
+      if (response.length > 0) {
+        console.log('[PaymentsService] Primeiro item completo:', JSON.stringify(response[0], null, 2));
+      }
+      
+      const processedPlayers = response.map((player: any, index: number) => {
+        console.log(`[PaymentsService] Processando jogador ${index}:`, JSON.stringify(player, null, 2));
+        
+        const processed = {
+          ...player,
+          monthlyFee: parseFloat(player.monthly_fee || player.monthlyFee || '0'),
+          customMonthlyFee: player.custom_monthly_fee ? parseFloat(player.custom_monthly_fee) : null,
+          pendingMonthsCount: parseInt(player.pending_months_count || player.pendingMonthsCount || '0', 10),
+        };
+        
+        console.log(`[PaymentsService] Jogador ${index} processado:`, JSON.stringify(processed, null, 2));
+        return processed;
+      });
+      
+      console.log('[PaymentsService] Total de jogadores processados:', processedPlayers.length);
+      console.log('[PaymentsService] Todos os jogadores processados:', JSON.stringify(processedPlayers, null, 2));
+      
+      const adaptedResponse = {
+        data: processedPlayers,
         pagination: {
-          page: 1,
-          pages: 1,
-          per_page: normalized.length,
-          total: normalized.length,
-          has_next: false,
-          has_prev: false,
-        },
-      } as PaginatedApiResponse<MonthlyPlayer>;
-    } catch (error) {
-      throw this.handleServiceError(`Erro ao buscar jogadores do período ${periodId}`, error);
+          page: params?.page || 1,
+          per_page: params?.per_page || 100,
+          total: response.length,
+          pages: 1
+        }
+      };
+      
+      console.log('[PaymentsService] Resposta adaptada final:', JSON.stringify(adaptedResponse, null, 2));
+      console.log('[PaymentsService] getMonthlyPlayers - RETORNANDO ARRAY ADAPTADO');
+      return adaptedResponse;
     }
+
+    // Se a resposta já tem o formato esperado
+    console.log('[PaymentsService] Resposta tem formato padrão, processando...');
+    console.log('[PaymentsService] response.data:', response.data);
+    console.log('[PaymentsService] Tipo de response.data:', typeof response.data);
+    console.log('[PaymentsService] É array?:', Array.isArray(response.data));
+    
+    const players = response.data?.map((player: any, index: number) => {
+      console.log(`[PaymentsService] Processando jogador padrão ${index}:`, JSON.stringify(player, null, 2));
+      
+      const processed = {
+        ...player,
+        monthlyFee: parseFloat(player.monthly_fee || player.monthlyFee || '0'),
+        customMonthlyFee: player.custom_monthly_fee ? parseFloat(player.custom_monthly_fee) : null,
+        pendingMonthsCount: parseInt(player.pending_months_count || player.pendingMonthsCount || '0', 10),
+      };
+      
+      console.log(`[PaymentsService] Jogador padrão ${index} processado:`, JSON.stringify(processed, null, 2));
+      return processed;
+    }) || [];
+
+    console.log('[PaymentsService] Total de jogadores processados (formato padrão):', players.length);
+    console.log('[PaymentsService] Todos os jogadores processados (formato padrão):', JSON.stringify(players, null, 2));
+
+    const finalResponse = {
+      data: players,
+      pagination: response.pagination || {
+        page: params?.page || 1,
+        per_page: params?.per_page || 100,
+        total: players.length,
+        pages: Math.ceil(players.length / (params?.per_page || 100))
+      }
+    };
+    
+    console.log('[PaymentsService] Paginação original:', response.pagination);
+    console.log('[PaymentsService] Paginação final:', finalResponse.pagination);
+    console.log('[PaymentsService] Dados finais:', finalResponse.data);
+    console.log('[PaymentsService] Quantidade final de jogadores:', finalResponse.data.length);
+    console.log('[PaymentsService] Resposta final padrão completa:', JSON.stringify(finalResponse, null, 2));
+    console.log('[PaymentsService] getMonthlyPlayers - RETORNANDO FORMATO PADRÃO');
+    return finalResponse;
   }
 
   /**
@@ -325,19 +387,12 @@ export class PaymentsService {
       this.validateStandardResponse(response);
       console.log('[PaymentsService] Resposta validada com sucesso');
       
-      const normalized = (response.data || []).map((p) => ({
-        ...p,
-        monthly_fee: toNum(p.monthly_fee),
-        custom_monthly_fee: p.custom_monthly_fee !== undefined ? toNum(p.custom_monthly_fee) : undefined,
-        effective_monthly_fee: toNum(p.effective_monthly_fee),
-        amount_paid: toNum(p.amount_paid),
-        pending_months_count: toNum(p.pending_months_count),
-      }));
-      
-      console.log('[PaymentsService] Dados normalizados:', normalized);
+      // O backend retorna um objeto com informações sobre a operação, não um array de jogadores
+      // Retornamos a resposta original que contém added_players e total_expected_increase
+      console.log('[PaymentsService] Dados da resposta:', response.data);
       console.log('[PaymentsService] addPlayersToMonthlyPeriod - SUCESSO');
       
-      return { ...response, data: normalized };
+      return response;
     } catch (error) {
       console.error('[PaymentsService] Erro ao adicionar jogadores:', error);
       console.error('[PaymentsService] Tipo do erro:', typeof error);

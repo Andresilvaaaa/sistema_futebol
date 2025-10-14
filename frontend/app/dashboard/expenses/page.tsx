@@ -32,18 +32,24 @@ export default function ExpensesPage() {
       const currentMonth = currentDate.getMonth() + 1
       const currentYear = currentDate.getFullYear()
       
+      console.log(`🔍 Buscando período para: ${currentMonth}/${currentYear}`)
+      
       const periodsResponse = await paymentsService.getMonthlyPeriods({
         month: currentMonth,
         year: currentYear
       })
       
+      console.log('📊 Resposta da API de períodos:', periodsResponse)
+      
       if (periodsResponse.success && periodsResponse.data.length > 0) {
         const period = periodsResponse.data[0]
+        console.log(`✅ Período encontrado: ${period.name} (ID: ${period.id})`)
         setCurrentPeriodId(period.id)
         
         // Carregar despesas do período atual
         await loadExpenses(period.id)
       } else {
+        console.log('❌ Nenhum período encontrado para o mês atual')
         // Se não há período atual, criar um vazio
         setExpenses([])
         toast({
@@ -53,7 +59,7 @@ export default function ExpensesPage() {
         })
       }
     } catch (error) {
-      console.error('Erro ao carregar período e despesas:', error)
+      console.error('🚨 Erro ao carregar período e despesas:', error)
       toast({
         title: "Erro",
         description: "Erro ao carregar dados. Usando dados locais.",
@@ -107,10 +113,13 @@ export default function ExpensesPage() {
   }
 
   const handleAddExpense = async (newExpenseData: CreateExpenseRequest) => {
+    console.log(`💰 Tentando criar despesa. currentPeriodId: ${currentPeriodId}`)
+    
     if (!currentPeriodId) {
+      console.log('❌ currentPeriodId não está definido!')
       toast({
         title: "Erro",
-        description: "Nenhum período mensal ativo encontrado",
+        description: "Período mensal não encontrado. Tente recarregar a página.",
         variant: "destructive"
       })
       return
@@ -128,10 +137,26 @@ export default function ExpensesPage() {
       }
     } catch (error) {
       console.error('Erro ao adicionar despesa:', error)
+      // Exibir mensagem detalhada quando disponível
+      const defaultDesc = 'Erro ao adicionar despesa'
+      try {
+        const { ApiException } = require('@/lib/api')
+        if (error instanceof ApiException) {
+          const apiMessage = error.message || defaultDesc
+          const detailedErrors = error.details?.errors
+          const detailedText = detailedErrors ? JSON.stringify(detailedErrors) : undefined
+          toast({
+            title: 'Erro',
+            description: detailedText ? `${apiMessage}: ${detailedText}` : apiMessage,
+            variant: 'destructive'
+          })
+          return
+        }
+      } catch {}
       toast({
-        title: "Erro",
-        description: "Erro ao adicionar despesa",
-        variant: "destructive"
+        title: 'Erro',
+        description: defaultDesc,
+        variant: 'destructive'
       })
     }
   }

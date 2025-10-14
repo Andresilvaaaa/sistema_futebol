@@ -5,6 +5,7 @@ from flask import jsonify
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 import decimal
+from marshmallow import ValidationError as MarshValidationError
 
 
 class APIResponse:
@@ -135,6 +136,10 @@ def handle_api_error(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
+        except MarshValidationError as e:
+            # Erros de validação do Marshmallow devem retornar 400 com detalhes
+            errors = getattr(e, 'messages', None)
+            return APIResponse.error('Dados inválidos', errors, 400)
         except ValidationError as e:
             return APIResponse.error(e.message, e.errors, 400)
         except ValueError as e:

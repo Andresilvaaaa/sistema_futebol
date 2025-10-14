@@ -59,13 +59,11 @@ class Player(db.Model):
     
     # Relacionamentos
     user = relationship("User", back_populates="players")
-    # Relacionamento com MonthlyPlayer usando chave composta (player_id, user_id)
+    # Relacionamento com MonthlyPlayer simplificado
     monthly_payments = relationship(
         "MonthlyPlayer",
         back_populates="player",
-        cascade="all, delete-orphan",
-        primaryjoin=lambda: and_(Player.id == MonthlyPlayer.player_id, Player.user_id == MonthlyPlayer.user_id),
-        foreign_keys=lambda: [MonthlyPlayer.player_id, MonthlyPlayer.user_id],
+        cascade="all, delete-orphan"
     )
     
     @validates('status')
@@ -120,16 +118,12 @@ class MonthlyPeriod(db.Model):
             MonthlyPeriod.user_id == MonthlyPlayer.user_id
         ),
         foreign_keys=lambda: [MonthlyPlayer.monthly_period_id, MonthlyPlayer.user_id],
+        overlaps="monthly_payments"
     )
     casual_players = relationship(
         "CasualPlayer",
         back_populates="monthly_period",
-        cascade="all, delete-orphan",
-        primaryjoin=lambda: and_(
-            MonthlyPeriod.id == CasualPlayer.monthly_period_id,
-            MonthlyPeriod.user_id == CasualPlayer.user_id
-        ),
-        foreign_keys=lambda: [CasualPlayer.monthly_period_id, CasualPlayer.user_id],
+        cascade="all, delete-orphan"
     )
     expenses = relationship(
         "Expense",
@@ -140,6 +134,7 @@ class MonthlyPeriod(db.Model):
             MonthlyPeriod.user_id == Expense.user_id
         ),
         foreign_keys=lambda: [Expense.monthly_period_id, Expense.user_id],
+        overlaps="expenses,monthly_period"
     )
     
     @validates('month')
@@ -165,15 +160,12 @@ class MonthlyPlayer(db.Model):
     __table_args__ = (
         # Evita duplicidade de pagamento para mesmo jogador/período/usuário
         UniqueConstraint('user_id', 'player_id', 'monthly_period_id', name='uq_monthly_players_user_player_period'),
-        # Garante que player e período pertencem ao mesmo usuário
-        ForeignKeyConstraint(['player_id', 'user_id'], ['players.id', 'players.user_id'], ondelete='CASCADE'),
-        ForeignKeyConstraint(['monthly_period_id', 'user_id'], ['monthly_periods.id', 'monthly_periods.user_id'], ondelete='CASCADE'),
     )
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    player_id = Column(String(36), nullable=False)
-    monthly_period_id = Column(String(36), nullable=False)
-    user_id = Column(String(36), nullable=False)
+    player_id = Column(String(36), ForeignKey('players.id'), nullable=False)
+    monthly_period_id = Column(String(36), ForeignKey('monthly_periods.id'), nullable=False)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     
     # Dados do jogador no momento (snapshot)
     player_name = Column(String(100), nullable=False)
@@ -193,29 +185,10 @@ class MonthlyPlayer(db.Model):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relacionamentos
-    # Relacionamento com Player usando chave composta (player_id, user_id)
-    player = relationship(
-        "Player",
-        back_populates="monthly_payments",
-        primaryjoin=lambda: and_(MonthlyPlayer.player_id == Player.id, MonthlyPlayer.user_id == Player.user_id),
-        foreign_keys=lambda: [MonthlyPlayer.player_id, MonthlyPlayer.user_id],
-    )
-    monthly_period = relationship(
-        "MonthlyPeriod",
-        back_populates="monthly_players",
-        primaryjoin=lambda: and_(
-            MonthlyPlayer.monthly_period_id == MonthlyPeriod.id,
-            MonthlyPlayer.user_id == MonthlyPeriod.user_id
-        ),
-        foreign_keys=lambda: [MonthlyPlayer.monthly_period_id, MonthlyPlayer.user_id],
-    )
-    user = relationship(
-        "User",
-        back_populates="monthly_players",
-        primaryjoin=lambda: MonthlyPlayer.user_id == User.id,
-        foreign_keys=lambda: [MonthlyPlayer.user_id],
-    )
+    # Relacionamentos simplificados
+    player = relationship("Player", back_populates="monthly_payments")
+    monthly_period = relationship("MonthlyPeriod", back_populates="monthly_players")
+    user = relationship("User", back_populates="monthly_players")
     
     @property
     def effective_monthly_fee(self):
@@ -236,18 +209,10 @@ class MonthlyPlayer(db.Model):
 class CasualPlayer(db.Model):
     """Modelo para jogadores casuais (avulsos)"""
     __tablename__ = 'casual_players'
-    __table_args__ = (
-        # Garante que o jogador casual referencia período do mesmo usuário
-        ForeignKeyConstraint(
-            ['monthly_period_id', 'user_id'],
-            ['monthly_periods.id', 'monthly_periods.user_id'],
-            ondelete='CASCADE'
-        ),
-    )
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    monthly_period_id = Column(String(36), nullable=False)
-    user_id = Column(String(36), nullable=False)
+    monthly_period_id = Column(String(36), ForeignKey('monthly_periods.id'), nullable=False)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     
     player_name = Column(String(100), nullable=False)
     play_date = Column(Date, nullable=False)
@@ -262,22 +227,9 @@ class CasualPlayer(db.Model):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relacionamentos
-    monthly_period = relationship(
-        "MonthlyPeriod",
-        back_populates="casual_players",
-        primaryjoin=lambda: and_(
-            MonthlyPeriod.id == CasualPlayer.monthly_period_id,
-            MonthlyPeriod.user_id == CasualPlayer.user_id
-        ),
-        foreign_keys=lambda: [CasualPlayer.monthly_period_id, CasualPlayer.user_id],
-    )
-    user = relationship(
-        "User",
-        back_populates="casual_players",
-        primaryjoin=lambda: CasualPlayer.user_id == User.id,
-        foreign_keys=lambda: [CasualPlayer.user_id],
-    )
+    # Relacionamentos simplificados
+    monthly_period = relationship("MonthlyPeriod", back_populates="casual_players")
+    user = relationship("User", back_populates="casual_players")
     
     @validates('status')
     def validate_status(self, key, status):
@@ -322,12 +274,14 @@ class Expense(db.Model):
             Expense.user_id == MonthlyPeriod.user_id
         ),
         foreign_keys=lambda: [Expense.monthly_period_id, Expense.user_id],
+        overlaps="expenses,user"
     )
     user = relationship(
         "User",
         back_populates="expenses",
         primaryjoin=lambda: Expense.user_id == User.id,
         foreign_keys=lambda: [Expense.user_id],
+        overlaps="expenses,monthly_period"
     )
     
     @validates('month')
@@ -385,13 +339,12 @@ class User(db.Model):
         cascade="all, delete-orphan",
         primaryjoin=lambda: User.id == MonthlyPlayer.user_id,
         foreign_keys=lambda: [MonthlyPlayer.user_id],
+        overlaps="monthly_players,player,monthly_period"
     )
     casual_players = relationship(
         "CasualPlayer",
         back_populates="user",
-        cascade="all, delete-orphan",
-        primaryjoin=lambda: User.id == CasualPlayer.user_id,
-        foreign_keys=lambda: [CasualPlayer.user_id],
+        cascade="all, delete-orphan"
     )
     expenses = relationship(
         "Expense",
@@ -399,6 +352,7 @@ class User(db.Model):
         cascade="all, delete-orphan",
         primaryjoin=lambda: User.id == Expense.user_id,
         foreign_keys=lambda: [Expense.user_id],
+        overlaps="expenses,monthly_period"
     )
 
     def set_password(self, password: str):
