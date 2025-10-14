@@ -4,7 +4,8 @@ Estrutura completa com blueprints, configurações e banco de dados
 """
 
 import os
-from flask import Flask, jsonify
+import time
+from flask import Flask, jsonify, g, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_marshmallow import Marshmallow
@@ -62,7 +63,36 @@ def create_app(config_name=None):
     
     # Registrar rotas básicas
     register_basic_routes(app)
-    
+
+    # ===================== PERF MONITORING (Request Timing) =====================
+    @app.before_request
+    def _perf_request_start():
+        try:
+            g._req_start = time.perf_counter()
+        except Exception:
+            # silencioso em ambientes sem suporte
+            pass
+
+    @app.after_request
+    def _perf_request_end(response):
+        try:
+            start = getattr(g, '_req_start', None)
+            if start is not None:
+                duration_ms = int((time.perf_counter() - start) * 1000)
+                # Expor duração via header para consumo por frontend/observabilidade
+                response.headers['X-Request-Duration-ms'] = str(duration_ms)
+                # Log estruturado
+                try:
+                    app.logger.info(
+                        f"[Perf][Request] {request.method} {request.path} -> {response.status_code} in {duration_ms}ms"
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return response
+    # ===========================================================================
+
     return app
 
 

@@ -40,20 +40,39 @@ export async function getCashflowByMonth(params?: { startYear?: number; endYear?
       profit: 0,
     }))
 
-  // Fetch expenses per period and aggregate
-  for (const p of filtered) {
+  // Buscar despesas por período em paralelo e agregar
+  const start = (typeof performance !== 'undefined') ? performance.now() : Date.now()
+  const expensePromises = filtered.map(async (p) => {
     try {
       const expRes = await expensesService.getExpenses(p.id)
       const totalExpenses = (expRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0)
-      const idx = base.findIndex((m) => m.year === p.year && m.monthNumber === p.month)
-      if (idx >= 0) {
-        base[idx].expenses = totalExpenses
-        base[idx].balance = base[idx].income - base[idx].expenses
-        base[idx].profit = base[idx].balance
-      }
-    } catch (_) {
-      // Se falhar, deixa despesas como 0 para não quebrar a página
+      return { period: p, totalExpenses }
+    } catch (_e) {
+      return { period: p, totalExpenses: 0 }
     }
+  })
+
+  const expenseResults = await Promise.all(expensePromises)
+  expenseResults.forEach(({ period: p, totalExpenses }) => {
+    const idx = base.findIndex((m) => m.year === p.year && m.monthNumber === p.month)
+    if (idx >= 0) {
+      base[idx].expenses = totalExpenses
+      base[idx].balance = base[idx].income - base[idx].expenses
+      base[idx].profit = base[idx].balance
+    }
+  })
+  const end = (typeof performance !== 'undefined') ? performance.now() : Date.now()
+  const duration = Math.round(end - start)
+  try {
+    console.log(`[Perf][Cashflow] Agregação de despesas (${filtered.length} períodos) -> ${duration}ms`)
+    if (typeof window !== 'undefined') {
+      ;(window as any).__perfMetrics = (window as any).__perfMetrics || []
+      ;(window as any).__perfMetrics.push({
+        type: 'cashflow', action: 'aggregate-expenses', periodsCount: filtered.length, duration, timestamp: Date.now()
+      })
+    }
+  } catch (_e) {
+    // silent
   }
 
   return base

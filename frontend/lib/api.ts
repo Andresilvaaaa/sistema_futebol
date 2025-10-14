@@ -190,12 +190,27 @@ class ApiClient {
     }
 
     try {
+      const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers: this.getHeaders(),
       });
 
-      return this.handleResponse<T>(response);
+      const result = await this.handleResponse<T>(response);
+      const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const duration = Math.round(end - start);
+      try {
+        console.log(`[Perf][API] GET ${endpoint} -> ${duration}ms (status: ${response.status})`);
+        if (typeof window !== 'undefined') {
+          (window as any).__perfMetrics = (window as any).__perfMetrics || [];
+          (window as any).__perfMetrics.push({
+            type: 'api', method: 'GET', endpoint, status: response.status, duration, timestamp: Date.now()
+          });
+        }
+      } catch (_e) {
+        // silent
+      }
+      return result;
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;
@@ -212,39 +227,33 @@ class ApiClient {
    * Método POST genérico com tipagem forte
    */
   async post<T>(endpoint: string, data?: any): Promise<T> {
-    console.log('[ApiClient] POST - INÍCIO');
-    console.log('[ApiClient] Endpoint:', endpoint);
-    console.log('[ApiClient] Data:', data);
-    
     const fullUrl = this.buildUrl(endpoint);
-    console.log('[ApiClient] URL completa:', fullUrl);
-    
     const headers = this.getHeaders();
-    console.log('[ApiClient] Headers:', headers);
     
     try {
-      console.log('[ApiClient] Iniciando fetch...');
+      const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const response = await fetch(fullUrl, {
         method: 'POST',
         headers: headers,
         body: data ? JSON.stringify(data) : undefined,
       });
 
-      console.log('[ApiClient] Resposta recebida:');
-      console.log('[ApiClient] Status:', response.status);
-      console.log('[ApiClient] StatusText:', response.statusText);
-      console.log('[ApiClient] Headers da resposta:', Object.fromEntries(response.headers.entries()));
-      
       const result = await this.handleResponse<T>(response);
-      console.log('[ApiClient] POST - SUCESSO');
-      console.log('[ApiClient] Resultado final:', result);
-      
+      const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const duration = Math.round(end - start);
+      try {
+        console.log(`[Perf][API] POST ${endpoint} -> ${duration}ms (status: ${response.status})`);
+        if (typeof window !== 'undefined') {
+          (window as any).__perfMetrics = (window as any).__perfMetrics || [];
+          (window as any).__perfMetrics.push({
+            type: 'api', method: 'POST', endpoint, status: response.status, duration, timestamp: Date.now()
+          });
+        }
+      } catch (_e) {
+        // silent
+      }
       return result;
     } catch (error) {
-      console.error('[ApiClient] Erro no POST:', error);
-      console.error('[ApiClient] Tipo do erro:', typeof error);
-      console.error('[ApiClient] Stack trace:', error instanceof Error ? error.stack : 'N/A');
-      
       if (error instanceof ApiException) {
         throw error;
       }
@@ -261,13 +270,28 @@ class ApiClient {
    */
   async put<T>(endpoint: string, data?: any): Promise<T> {
     try {
+      const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const response = await fetch(this.buildUrl(endpoint), {
         method: 'PUT',
         headers: this.getHeaders(),
         body: data ? JSON.stringify(data) : undefined,
       });
 
-      return this.handleResponse<T>(response);
+      const result = await this.handleResponse<T>(response);
+      const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const duration = Math.round(end - start);
+      try {
+        console.log(`[Perf][API] PUT ${endpoint} -> ${duration}ms (status: ${response.status})`);
+        if (typeof window !== 'undefined') {
+          (window as any).__perfMetrics = (window as any).__perfMetrics || [];
+          (window as any).__perfMetrics.push({
+            type: 'api', method: 'PUT', endpoint, status: response.status, duration, timestamp: Date.now()
+          });
+        }
+      } catch (_e) {
+        // silent
+      }
+      return result;
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;
@@ -285,12 +309,27 @@ class ApiClient {
    */
   async delete<T>(endpoint: string): Promise<T> {
     try {
+      const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const response = await fetch(this.buildUrl(endpoint), {
         method: 'DELETE',
         headers: this.getHeaders(),
       });
 
-      return this.handleResponse<T>(response);
+      const result = await this.handleResponse<T>(response);
+      const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const duration = Math.round(end - start);
+      try {
+        console.log(`[Perf][API] DELETE ${endpoint} -> ${duration}ms (status: ${response.status})`);
+        if (typeof window !== 'undefined') {
+          (window as any).__perfMetrics = (window as any).__perfMetrics || [];
+          (window as any).__perfMetrics.push({
+            type: 'api', method: 'DELETE', endpoint, status: response.status, duration, timestamp: Date.now()
+          });
+        }
+      } catch (_e) {
+        // silent
+      }
+      return result;
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;
@@ -308,13 +347,28 @@ class ApiClient {
    */
   async patch<T>(endpoint: string, data?: any): Promise<T> {
     try {
+      const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const response = await fetch(this.buildUrl(endpoint), {
         method: 'PATCH',
         headers: this.getHeaders(),
         body: data ? JSON.stringify(data) : undefined,
       });
 
-      return this.handleResponse<T>(response);
+      const result = await this.handleResponse<T>(response);
+      const end = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const duration = Math.round(end - start);
+      try {
+        console.log(`[Perf][API] PATCH ${endpoint} -> ${duration}ms (status: ${response.status})`);
+        if (typeof window !== 'undefined') {
+          (window as any).__perfMetrics = (window as any).__perfMetrics || [];
+          (window as any).__perfMetrics.push({
+            type: 'api', method: 'PATCH', endpoint, status: response.status, duration, timestamp: Date.now()
+          });
+        }
+      } catch (_e) {
+        // silent
+      }
+      return result;
     } catch (error) {
       if (error instanceof ApiException) {
         throw error;
