@@ -1,0 +1,132 @@
+name: Deploy Sistema Futebol
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ${{ github.repository_owner }}/sistema-futebol-backend
+  IMAGE_FRONTEND: ${{ github.repository_owner }}/sistema-futebol-frontend
+
+jobs:
+  build-and-deploy:
+    name: 🚀 Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: 🛠️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐍 Build & Push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: ⚛️ Build & Push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://backend:5000
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 📡 Deploy via SSH (docker compose pull/up)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.ssh_host }}
+          username: ${{ secrets.ssh_user }}
+          password: ${{ secrets.ssh_password }}
+          script_stop: true
+          envs: IMAGE_NAMESPACE
+          command_timeout: 30m
+          script: |
+            set -e
+            mkdir -p ~/fin_flask_react
+            cd ~/fin_flask_react
+
+            # Login no GHCR para pull (usa secrets do servidor)
+            echo "${{ secrets.ghcr_token }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.ghcr_user }}" --password-stdin
+
+            # Namespace das imagens (ex: ghcr.io/<owner>)
+            export IMAGE_NAMESPACE="${{ env.REGISTRY }}/${{ github.repository_owner }}"
+
+            # Garantir docker-compose.yml atualizado
+            cat > docker-compose.yml <<'COMPOSE'
+            version: '3.9'
+
+            services:
+              backend:
+                image: ${IMAGE_NAMESPACE}/sistema-futebol-backend:latest
+                restart: unless-stopped
+                environment:
+                  FLASK_ENV: production
+                  DATABASE_URL: ${DATABASE_URL}
+                  SECRET_KEY: ${SECRET_KEY}
+                  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+                  CORS_ORIGINS: ${CORS_ORIGINS}
+                ports:
+                  - "5000:5000"
+                volumes:
+                  - ./instance:/app/instance
+                  - ./uploads:/app/uploads
+                  - ./logs:/app/logs
+
+              frontend:
+                image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
+                restart: unless-stopped
+                environment:
+                  PORT: 3000
+                ports:
+                  - "80:3000"
+                depends_on:
+                  - backend
+
+            networks:
+              default:
+                name: sistema-futebol
+            COMPOSE
+
+            # Atualizar .env de produção (valores vindos de GitHub Secrets)
+            cat > .env <<ENVFILE
+            IMAGE_NAMESPACE=${IMAGE_NAMESPACE}
+            DATABASE_URL=${{ secrets.prod_database_url }}
+            SECRET_KEY=${{ secrets.prod_secret_key }}
+            JWT_SECRET_KEY=${{ secrets.prod_jwt_secret_key }}
+            CORS_ORIGINS=${{ secrets.prod_cors_origins }}
+            ENVFILE
+
+            # Atualizar e subir serviços
+            docker compose pull
+            docker compose up -d

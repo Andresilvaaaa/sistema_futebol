@@ -255,8 +255,8 @@ export default function ExpensesPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-background py-6 px-3">
+      <div className="container-page">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

@@ -90,11 +90,24 @@ class DevelopmentConfig(BaseConfig):
         os.makedirs(instance_dir, exist_ok=True)
 
         import logging
+        # Console logging detalhado em desenvolvimento
         logging.basicConfig(
             level=logging.DEBUG,
-            format='%(asctime)s %(levelname)s: %(message)s '
-                   '[in %(pathname)s:%(lineno)d]'
+            format='%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
         )
+        # Garantir que o app.logger seja verboso e propague para o root handler
+        try:
+            app.logger.setLevel(logging.DEBUG)
+            app.logger.propagate = True
+        except Exception:
+            pass
+
+        # Access logs do Werkzeug (requisições HTTP) no console
+        try:
+            werk_logger = logging.getLogger('werkzeug')
+            werk_logger.setLevel(logging.INFO)
+        except Exception:
+            pass
 
 
 class ProductionConfig(BaseConfig):

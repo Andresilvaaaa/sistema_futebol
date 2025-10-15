@@ -1,6 +1,7 @@
 import type { MonthlyFinancials, CashFlowSummary } from "@/types/cashflow"
 import { paymentsService } from "./services/payments"
 import { expensesService } from "./services/expenses"
+import { api } from "./api"
 
 const MONTH_NAMES = [
   "Janeiro",
@@ -18,6 +19,58 @@ const MONTH_NAMES = [
 ]
 
 export async function getCashflowByMonth(params?: { startYear?: number; endYear?: number }): Promise<MonthlyFinancials[]> {
+  const useAggregated = process.env.NEXT_PUBLIC_USE_AGGREGATED_CF === 'true'
+
+  // Caminho agregado (feature flag) com fallback ao método atual
+  if (useAggregated) {
+    const start = (typeof performance !== 'undefined') ? performance.now() : Date.now()
+    try {
+      const resp = await api.get<any[]>("/api/cashflow/summary")
+      const aggregated = Array.isArray(resp) ? resp : []
+
+      const mapped: MonthlyFinancials[] = aggregated.map((r) => {
+        const y = r?.period?.year ?? 0
+        const m = r?.period?.month ?? 0
+        const monthLabel = MONTH_NAMES[m - 1] || String(m)
+        const income = Number(r?.monthly?.received ?? 0)
+        const expenses = Number(r?.expenses?.total ?? 0)
+        const balance = income - expenses
+        return {
+          month: monthLabel,
+          year: y,
+          monthNumber: m,
+          income,
+          expenses,
+          balance,
+          profit: balance,
+        }
+      })
+
+      const filtered = mapped.filter((p) => {
+        if (params?.startYear && p.year < params.startYear) return false
+        if (params?.endYear && p.year > params.endYear) return false
+        return true
+      }).sort((a, b) => (a.year - b.year) || (a.monthNumber - b.monthNumber))
+
+      const end = (typeof performance !== 'undefined') ? performance.now() : Date.now()
+      const duration = Math.round(end - start)
+      try {
+        console.log(`[Perf][Cashflow] Endpoint agregado (/cashflow/summary) -> ${duration}ms`)
+        if (typeof window !== 'undefined') {
+          ;(window as any).__perfMetrics = (window as any).__perfMetrics || []
+          ;(window as any).__perfMetrics.push({
+            type: 'cashflow', action: 'aggregated-endpoint', periodsCount: filtered.length, duration, timestamp: Date.now()
+          })
+        }
+      } catch (_e) {}
+
+      return filtered
+    } catch (_err) {
+      // Fallback silencioso ao método atual
+    }
+  }
+
+  // Método atual (fallback): busca períodos e agrega despesas por período
   const periodsRes = await paymentsService.getMonthlyPeriods()
   const periods = periodsRes.data || []
 

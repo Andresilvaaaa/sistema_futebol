@@ -4,7 +4,8 @@ Controladores da API para gerenciamento de jogadores e pagamentos mensais
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import and_, extract
+from sqlalchemy import and_, extract, func
+from sqlalchemy.orm import joinedload
 from datetime import datetime
 import uuid
 
@@ -972,8 +973,10 @@ def get_monthly_period_players(period_id):
         print(f"✅ [FLASK] Período encontrado: {period.name} ({period.month}/{period.year})")
         print(f"🔍 [FLASK] Período players_count: {period.players_count}")
         
-        # Buscar jogadores do período do usuário
-        monthly_players_query = MonthlyPlayer.query.filter(
+        # Buscar jogadores do período do usuário com joinedload para evitar N+1
+        monthly_players_query = MonthlyPlayer.query.options(
+            joinedload(MonthlyPlayer.player)
+        ).filter(
             and_(MonthlyPlayer.monthly_period_id == period_id, MonthlyPlayer.user_id == current_user_id)
         )
         
@@ -1354,6 +1357,86 @@ def get_monthly_period_casual_players(period_id):
         
     except Exception as e:
         return jsonify({'error': f'Erro ao buscar jogadores casuais do período: {str(e)}'}), 500
+
+
+# ==================== CASHFLOW SUMMARY (Aggregated) ====================
+
+@api_bp.route('/cashflow/summary', methods=['GET'])
+@jwt_required()
+def get_cashflow_summary():
+    """
+    Retorna resumo financeiro agregado por mês para o usuário autenticado.
+    Filtros opcionais: year, month.
+
+    Formato por mês:
+    {
+      period: { year, month, name },
+      monthly: { expected, received },
+      expenses: { total, itemsCount },
+      summary: { net }
+    }
+    """
+    try:
+        current_user_id = str(get_jwt_identity())
+        year = request.args.get('year', type=int)
+        month = request.args.get('month', type=int)
+
+        # Períodos com totais (expected/received)
+        periods_q = db.session.query(MonthlyPeriod).filter(MonthlyPeriod.user_id == current_user_id)
+        if year:
+            periods_q = periods_q.filter(MonthlyPeriod.year == year)
+        if month:
+            periods_q = periods_q.filter(MonthlyPeriod.month == month)
+
+        periods = periods_q.order_by(MonthlyPeriod.year.asc(), MonthlyPeriod.month.asc()).all()
+
+        # Agregar despesas por (year, month)
+        expenses_q = db.session.query(
+            Expense.year.label('year'),
+            Expense.month.label('month'),
+            func.coalesce(func.sum(Expense.amount), 0).label('total'),
+            func.count(Expense.id).label('count')
+        ).filter(Expense.user_id == current_user_id)
+        if year:
+            expenses_q = expenses_q.filter(Expense.year == year)
+        if month:
+            expenses_q = expenses_q.filter(Expense.month == month)
+        expenses_q = expenses_q.group_by(Expense.year, Expense.month)
+        expenses_agg = {(row.year, row.month): {'total': float(row.total or 0), 'count': int(row.count)} for row in expenses_q.all()}
+
+        result = []
+        for p in periods:
+            exp = expenses_agg.get((p.year, p.month), {'total': 0.0, 'count': 0})
+            monthly_expected = float(p.total_expected or 0)
+            monthly_received = float(p.total_received or 0)
+            total_expenses = float(exp['total'] or 0)
+            net = monthly_received - total_expenses
+
+            result.append({
+                'period': {
+                    'year': p.year,
+                    'month': p.month,
+                    'name': p.name
+                },
+                'monthly': {
+                    'expected': monthly_expected,
+                    'received': monthly_received
+                },
+                'expenses': {
+                    'total': total_expenses,
+                    'itemsCount': exp['count']
+                },
+                'summary': {
+                    'net': net
+                }
+            })
+
+        # Ordena por ano/mês ascendente para consistência
+        result.sort(key=lambda x: (x['period']['year'], x['period']['month']))
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Erro ao gerar resumo: {str(e)}'}), 500
 
 
 @api_bp.route('/monthly-periods/<period_id>/expenses', methods=['GET'])

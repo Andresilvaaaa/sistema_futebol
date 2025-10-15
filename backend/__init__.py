@@ -5,10 +5,12 @@ Estrutura completa com blueprints, configurações e banco de dados
 
 import os
 import time
+import uuid
 from flask import Flask, jsonify, g, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_marshmallow import Marshmallow
+from flask_compress import Compress
 
 # Importações locais
 from .config import get_config
@@ -17,6 +19,9 @@ from .services.db.connection import _enable_sqlite_foreign_keys  # internal help
 from .blueprints.api.controllers import api_bp
 from .blueprints.auth.controllers import auth_bp
 from .blueprints.admin.controllers import admin_bp
+
+# Extensão de compressão HTTP
+compress = Compress()
 
 
 def create_app(config_name=None):
@@ -66,6 +71,13 @@ def create_app(config_name=None):
 
     # ===================== PERF MONITORING (Request Timing) =====================
     @app.before_request
+    def _trace_id_start():
+        # Gera um Trace ID para correlacionar logs e requisições
+        try:
+            g._trace_id = uuid.uuid4().hex
+        except Exception:
+            g._trace_id = None
+    @app.before_request
     def _perf_request_start():
         try:
             g._req_start = time.perf_counter()
@@ -81,6 +93,10 @@ def create_app(config_name=None):
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 # Expor duração via header para consumo por frontend/observabilidade
                 response.headers['X-Request-Duration-ms'] = str(duration_ms)
+                # Expor Trace ID (se disponível)
+                trace_id = getattr(g, '_trace_id', None)
+                if trace_id:
+                    response.headers['X-Trace-Id'] = trace_id
                 # Log estruturado
                 try:
                     app.logger.info(
@@ -120,6 +136,15 @@ def init_extensions(app):
     
     # Marshmallow
     ma = Marshmallow(app)
+
+    # Compressão HTTP
+    try:
+        compress.init_app(app)
+        # Valores padrão seguros; ajustáveis via config
+        app.config.setdefault('COMPRESS_MIN_SIZE', 1024)
+        app.config.setdefault('COMPRESS_LEVEL', 6)
+    except Exception as e:
+        app.logger.warning(f"Falha ao inicializar Flask-Compress: {e}")
     
     # Configurar JWT callbacks
     @jwt.expired_token_loader

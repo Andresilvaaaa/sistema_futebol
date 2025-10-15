@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const nextConfig = {
+  // Gera artefatos 'standalone' para execução em contêiner
+  output: 'standalone',
   // Define explicitamente a raiz de tracing para evitar aviso de múltiplos lockfiles
   outputFileTracingRoot: path.join(__dirname, '../../'),
   eslint: {

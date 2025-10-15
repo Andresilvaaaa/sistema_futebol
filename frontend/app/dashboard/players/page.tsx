@@ -310,8 +310,8 @@ export default function PlayersPage() {
   if (loading) {
     return (
       <AuthGuard>
-        <div className="min-h-screen bg-background p-6">
-          <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen bg-background py-6 px-3">
+          <div className="container-page">
             <div className="flex items-center justify-center h-64">
               <div className="flex items-center gap-2">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -326,8 +326,8 @@ export default function PlayersPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-background py-6 px-3">
+      <div className="container-page">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-foreground">GERENCIAR JOGADORES</h1>

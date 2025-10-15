@@ -36,6 +36,15 @@ Rotas Principais
 - Login: `POST /api/auth/login`
 - Jogadores: `GET /api/players` (autenticado)
 - Períodos Mensais: `GET /api/monthly-periods` (autenticado)
+- Fluxo de Caixa (agregado): `GET /api/cashflow/summary` (autenticado)
+
+Feature Flags (Frontend)
+- `NEXT_PUBLIC_USE_AGGREGATED_CF=true` ativa o consumo do endpoint agregado com fallback automático.
+- Defina em `frontend/.env.local` ou variáveis do ambiente de build/deploy.
+
+Observabilidade
+- Todos os endpoints retornam `X-Trace-Id` e `X-Request-Duration-ms`.
+- Correlacione requisições pelo `X-Trace-Id` nos logs do backend.
 
 Comandos Úteis
 - `python -m flask db current` (revisão Alembic atual)

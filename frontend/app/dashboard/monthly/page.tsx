@@ -650,8 +650,8 @@ export default function MonthlyPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-background py-4 px-3">
+      <div className="container-page">
         <MonthNavigation currentMonth={currentMonth} currentYear={currentYear} onMonthChange={handleMonthChange} />
 
           <div className="space-y-4">

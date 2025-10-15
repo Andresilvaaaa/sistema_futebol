@@ -1,0 +1,39 @@
+version: '3.9'
+
+# Use .env (na raiz) para definir:
+# IMAGE_NAMESPACE=ghcr.io/<org_ou_usuario>
+# DATABASE_URL=postgresql://usuario:senha@host:5432/futebol_prod
+# SECRET_KEY=...
+# JWT_SECRET_KEY=...
+# CORS_ORIGINS=https://seu-dominio.com
+
+services:
+  backend:
+    image: ${IMAGE_NAMESPACE}/sistema-futebol-backend:latest
+    restart: unless-stopped
+    environment:
+      FLASK_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./instance:/app/instance
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+
+  frontend:
+    image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+    ports:
+      - "80:3000"
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: sistema-futebol

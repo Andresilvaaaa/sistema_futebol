@@ -5,6 +5,13 @@ Backend (pytest)
 - Rode: `pytest` na raiz (com venv ativo).
 - Cobertura de modelos, serviços, API e configuração.
 
+Testes Mínimos do Endpoint Agregado
+- Execute apenas o teste de fluxo de caixa agregado:
+  - `pytest -k cashflow_summary`
+- O teste valida:
+  - Presença dos headers `X-Trace-Id` e `X-Request-Duration-ms`.
+  - Contrato básico de `GET /api/cashflow/summary` (payload por mês, totais e saldo).
+
 Frontend (Vitest + Playwright)
 - Unit/integration em `frontend/__tests__` e `frontend/tests`.
 - Rode: `pnpm test` e `pnpm test:e2e`.

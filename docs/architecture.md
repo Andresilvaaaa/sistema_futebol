@@ -24,3 +24,8 @@ Inicialização e Configuração
 Observações de Migração
 - Uso de Alembic com diretório canônico `migrations/` na raiz.
 - Scripts adicionais existem em `backend/migrations/`, preferir padronizar por `migrations/` raiz.
+
+Observabilidade
+- `X-Trace-Id`: gerado em `before_request` e anexado aos headers em `after_request`.
+- `X-Request-Duration-ms`: métrica de duração da requisição medida no backend.
+- `Flask-Compress`: habilitado na inicialização para reduzir payloads; pode ser desativado para diagnóstico.

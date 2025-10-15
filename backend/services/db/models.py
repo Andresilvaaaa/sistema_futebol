@@ -315,6 +315,10 @@ Index('idx_expenses_period', Expense.monthly_period_id, Expense.month, Expense.y
 # Índice único para evitar períodos duplicados por usuário
 Index('idx_monthly_periods_unique', MonthlyPeriod.month, MonthlyPeriod.year, MonthlyPeriod.user_id, unique=True)
 
+# Índices adicionais para agregações por usuário/ano/mês (otimizam /cashflow/summary)
+Index('idx_expenses_user_year_month', Expense.user_id, Expense.year, Expense.month)
+Index('idx_monthly_periods_user_year_month', MonthlyPeriod.user_id, MonthlyPeriod.year, MonthlyPeriod.month)
+
 class User(db.Model):
     """Modelo de usuário para autenticação e perfil"""
     __tablename__ = 'users'
