@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { User, Building2, MapPin, Phone, Mail, Calendar, Save } from "lucide-react"
-import { getProfile, saveProfile, getInitials } from "@/lib/profile-storage"
+import { getProfile, updateProfile, getInitials } from "@/lib/profile-storage"
 import type { UserProfile, ProfileFormData } from "@/types/profile"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/lib/auth"
@@ -100,7 +100,7 @@ export default function ProfilePage() {
 
     setIsLoading(true)
     try {
-      const savedProfile = saveProfile(formData)
+      const savedProfile = updateProfile(formData)
       setProfile(savedProfile)
       setIsEditing(false)
       toast({

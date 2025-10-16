@@ -15,7 +15,7 @@ import {
   Activity
 } from 'lucide-react'
 import Link from 'next/link'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, BarChart, Bar } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Pie, PieChart as RechartsPieChart, Cell, BarChart, Bar } from 'recharts'
 
 // Mock data para demonstração
 const monthlyData = [
