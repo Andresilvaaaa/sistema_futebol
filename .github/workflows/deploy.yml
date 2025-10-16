@@ -70,7 +70,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: 📡 Deploy via SSH (docker compose pull/up) 📡
+      - name: 📡 Deploy via SSH (docker compose pull/up) 
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
