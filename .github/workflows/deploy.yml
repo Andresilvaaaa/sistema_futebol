@@ -71,15 +71,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: 🔑 Prepare SSH key
+      - name: 🔑 Prepare SSH key (Debug only)
         shell: bash
         run: |
-          mkdir -p ~/.ssh
-          # Grava a chave privada exatamente como no secret (sem alterar quebras de linha)
-          printf "%s" "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy_github
-          # Remove possíveis caracteres CR (Windows) ao final das linhas
-          sed -i 's/\r$//' ~/.ssh/id_deploy_github
-          chmod 600 ~/.ssh/id_deploy_github
+          echo "🔍 Verificando secret VPS_SSH_KEY..."
+          echo "Tamanho do secret: $(echo '${{ secrets.VPS_SSH_KEY }}' | wc -c) caracteres"
+          echo "Primeiros 50 caracteres: $(echo '${{ secrets.VPS_SSH_KEY }}' | head -c 50)"
 
       - name: 📡 Deploy to VPS
         uses: appleboy/ssh-action@master
@@ -92,7 +89,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           port: ${{ secrets.VPS_PORT }}
           username: ${{ secrets.VPS_USERNAME }}
-          key_path: ~/.ssh/id_deploy_github
+          key: ${{ secrets.VPS_SSH_KEY }}
           debug: true
           envs: PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,GITHUB_REPOSITORY
           command_timeout: 30m
