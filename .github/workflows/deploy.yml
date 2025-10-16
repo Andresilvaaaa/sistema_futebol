@@ -36,6 +36,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 🔤 Normalize owner to lowercase for GHCR tags
+        shell: bash
+        run: |
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "OWNER_LC=$OWNER_LC" >> $GITHUB_ENV
+          echo "IMAGE_BACKEND=$OWNER_LC/sistema-futebol-backend" >> $GITHUB_ENV
+          echo "IMAGE_FRONTEND=$OWNER_LC/sistema-futebol-frontend" >> $GITHUB_ENV
+
       - name: 🐍 Build & Push Backend image
         uses: docker/build-push-action@v5
         with:
@@ -81,7 +89,7 @@ jobs:
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.GHCR_USER }}" --password-stdin
 
             # Namespace das imagens (ex: ghcr.io/<owner>)
-            export IMAGE_NAMESPACE="${{ env.REGISTRY }}/${{ github.repository_owner }}"
+            export IMAGE_NAMESPACE="${{ env.REGISTRY }}/${{ env.OWNER_LC }}"
 
             # Garantir docker-compose.yml atualizado
             cat > docker-compose.yml <<'COMPOSE'
