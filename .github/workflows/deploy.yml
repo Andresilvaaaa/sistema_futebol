@@ -1,4 +1,4 @@
-name: Deploy TMS System
+name: Deploy futebol System
 
 on:
   push:
@@ -71,6 +71,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: 🔑 Prepare SSH key
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          # Grava a chave privada exatamente como no secret (sem alterar quebras de linha)
+          printf "%s" "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy_github
+          # Remove possíveis caracteres CR (Windows) ao final das linhas
+          sed -i 's/\r$//' ~/.ssh/id_deploy_github
+          chmod 600 ~/.ssh/id_deploy_github
+
       - name: 📡 Deploy to VPS
         uses: appleboy/ssh-action@master
         env:
@@ -82,7 +92,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           port: ${{ secrets.VPS_PORT }}
           username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          key_path: ~/.ssh/id_deploy_github
           debug: true
           envs: PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,GITHUB_REPOSITORY
           command_timeout: 30m
@@ -96,9 +106,9 @@ jobs:
             docker --version
             docker compose version
 
-            # Criar diretório do projeto
-            mkdir -p ~/TMS_FLASK_REACT
-            cd ~/TMS_FLASK_REACT
+            # Criar diretório do projeto (usa nome do repo)
+            mkdir -p ~/sistema_futebol
+            cd ~/sistema_futebol
 
             # Clone ou atualize repositório
             if [ -d ".git" ]; then
@@ -136,24 +146,3 @@ jobs:
 
             echo "🎉 Deploy concluído!"
             echo "📅 $(date)"
-            fi
-
-            # Login no GHCR para pull
-            echo "${GHCR_TOKEN}" | docker login ${REGISTRY} -u "${GHCR_USER}" --password-stdin
-
-            # Criar/atualizar .env para o docker-compose
-            cat > .env <<ENVFILE
-            IMAGE_NAMESPACE=${REGISTRY}/${OWNER_LC}
-            DATABASE_URL=${PROD_DATABASE_URL}
-            SECRET_KEY=${PROD_SECRET_KEY}
-            JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
-            CORS_ORIGINS=${PROD_CORS_ORIGINS}
-            ENVFILE
-
-            # Docker Compose
-            docker compose pull
-            docker compose down
-            docker compose up -d
-
-            # Aplicar migrações Alembic automaticamente no backend
-            docker compose exec -T -e FLASK_APP=wsgi.py backend flask db upgrade
