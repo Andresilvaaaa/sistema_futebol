@@ -77,7 +77,6 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
           envs: IMAGE_NAMESPACE
           command_timeout: 30m
           script: |
