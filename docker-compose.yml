@@ -9,7 +9,10 @@ version: '3.9'
 
 services:
   backend:
-    image: ${IMAGE_NAMESPACE}/sistema-futebol-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: sistema-futebol-backend:local
     restart: unless-stopped
     environment:
       FLASK_ENV: production
@@ -25,7 +28,10 @@ services:
       - ./logs:/app/logs
 
   frontend:
-    image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: sistema-futebol-frontend:local
     restart: unless-stopped
     environment:
       PORT: 3000

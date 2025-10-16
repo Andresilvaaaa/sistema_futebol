@@ -1,9 +1,10 @@
-name: Deploy Sistema Futebol
+name: Deploy TMS System
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -73,8 +74,6 @@ jobs:
       - name: 📡 Deploy to VPS
         uses: appleboy/ssh-action@master
         env:
-          GHCR_USER: ${{ secrets.GHCR_USER }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
           PROD_JWT_SECRET_KEY: ${{ secrets.PROD_JWT_SECRET_KEY }}
@@ -84,10 +83,18 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GHCR_USER,GHCR_TOKEN,REGISTRY,OWNER_LC,PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,GITHUB_REPOSITORY
+          debug: true
+          envs: PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,GITHUB_REPOSITORY
           command_timeout: 30m
           script: |
             set -e
+            echo "✅ Deploy iniciado!"
+            echo "📍 Servidor: $(hostname)"
+            echo "👤 Usuário: $(whoami)"
+
+            # Verificar Docker
+            docker --version
+            docker compose version
 
             # Criar diretório do projeto
             mkdir -p ~/TMS_FLASK_REACT
@@ -101,6 +108,34 @@ jobs:
             else
               echo "📥 Clonando repositório..."
               git clone https://github.com/${GITHUB_REPOSITORY}.git .
+            fi
+
+            # Criar/atualizar .env para docker compose (variáveis de produção)
+            echo "🔐 Atualizando .env..."
+            cat > .env <<EOF
+            DATABASE_URL=${PROD_DATABASE_URL}
+            SECRET_KEY=${PROD_SECRET_KEY}
+            JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
+            CORS_ORIGINS=${PROD_CORS_ORIGINS}
+            EOF
+
+            # Verificar se os Dockerfiles existem e subir com build
+            if [ -f "docker-compose.yml" ]; then
+              echo "🐳 Docker Compose encontrado!"
+              # Parar containers antigos
+              docker compose down || true
+              # Construir e iniciar containers
+              docker compose up -d --build
+              # Verificar status
+              docker compose ps
+            else
+              echo "⚠️ docker-compose.yml não encontrado"
+              echo "📁 Estrutura do projeto:"
+              ls -la
+            fi
+
+            echo "🎉 Deploy concluído!"
+            echo "📅 $(date)"
             fi
 
             # Login no GHCR para pull

@@ -6,7 +6,10 @@
 // Configuração base da API
 // Preferimos caminho relativo por padrão para usar rewrites do Next.js em desenvolvimento
 // Em produção, defina NEXT_PUBLIC_API_URL para apontar para o backend externo
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+// Importante: no browser usamos caminho relativo para aproveitar o proxy/rewrites do Next
+const API_BASE_URL = typeof window === 'undefined' 
+  ? (process.env.NEXT_PUBLIC_API_URL ?? '') 
+  : '';
 
 // Tipos para as respostas padronizadas da API
 export interface StandardApiResponse<T = any> {
