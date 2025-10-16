@@ -70,75 +70,55 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: 📡 Deploy via SSH (docker compose pull/up) 
+      - name: 📡 Deploy to VPS
         uses: appleboy/ssh-action@master
+        env:
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_JWT_SECRET_KEY: ${{ secrets.PROD_JWT_SECRET_KEY }}
+          PROD_CORS_ORIGINS: ${{ secrets.PROD_CORS_ORIGINS }}
         with:
           host: ${{ secrets.VPS_HOST }}
           port: ${{ secrets.VPS_PORT }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: IMAGE_NAMESPACE
+          envs: GHCR_USER,GHCR_TOKEN,REGISTRY,OWNER_LC,PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,GITHUB_REPOSITORY
           command_timeout: 30m
           script: |
             set -e
-            mkdir -p ~/fin_flask_react
-            cd ~/fin_flask_react
 
-            # Login no GHCR para pull (usa secrets do servidor)
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.GHCR_USER }}" --password-stdin
+            # Criar diretório do projeto
+            mkdir -p ~/TMS_FLASK_REACT
+            cd ~/TMS_FLASK_REACT
 
-            # Namespace das imagens (ex: ghcr.io/<owner>)
-            export IMAGE_NAMESPACE="${{ env.REGISTRY }}/${{ env.OWNER_LC }}"
+            # Clone ou atualize repositório
+            if [ -d ".git" ]; then
+              echo "📂 Atualizando repositório..."
+              git fetch --all
+              git reset --hard origin/main
+            else
+              echo "📥 Clonando repositório..."
+              git clone https://github.com/${GITHUB_REPOSITORY}.git .
+            fi
 
-            # Garantir docker-compose.yml atualizado
-            cat > docker-compose.yml <<'COMPOSE'
-            version: '3.9'
+            # Login no GHCR para pull
+            echo "${GHCR_TOKEN}" | docker login ${REGISTRY} -u "${GHCR_USER}" --password-stdin
 
-            services:
-              backend:
-                image: ${IMAGE_NAMESPACE}/sistema-futebol-backend:latest
-                restart: unless-stopped
-                environment:
-                  FLASK_ENV: production
-                  DATABASE_URL: ${DATABASE_URL}
-                  SECRET_KEY: ${SECRET_KEY}
-                  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-                  CORS_ORIGINS: ${CORS_ORIGINS}
-                ports:
-                  - "5000:5000"
-                volumes:
-                  - ./instance:/app/instance
-                  - ./uploads:/app/uploads
-                  - ./logs:/app/logs
-
-              frontend:
-                image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
-                restart: unless-stopped
-                environment:
-                  PORT: 3000
-                ports:
-                  - "80:3000"
-                depends_on:
-                  - backend
-
-            networks:
-              default:
-                name: sistema-futebol
-            COMPOSE
-
-            # Atualizar .env de produção (valores vindos de GitHub Secrets)
+            # Criar/atualizar .env para o docker-compose
             cat > .env <<ENVFILE
-            IMAGE_NAMESPACE=${IMAGE_NAMESPACE}
-            DATABASE_URL=${{ secrets.PROD_DATABASE_URL }}
-            SECRET_KEY=${{ secrets.PROD_SECRET_KEY }}
-            JWT_SECRET_KEY=${{ secrets.PROD_JWT_SECRET_KEY }}
-            CORS_ORIGINS=${{ secrets.PROD_CORS_ORIGINS }}
+            IMAGE_NAMESPACE=${REGISTRY}/${OWNER_LC}
+            DATABASE_URL=${PROD_DATABASE_URL}
+            SECRET_KEY=${PROD_SECRET_KEY}
+            JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
+            CORS_ORIGINS=${PROD_CORS_ORIGINS}
             ENVFILE
 
-            # Atualizar e subir serviços
+            # Docker Compose
             docker compose pull
+            docker compose down
             docker compose up -d
 
             # Aplicar migrações Alembic automaticamente no backend
-            # Usa FLASK_APP=wsgi.py para carregar a app factory
             docker compose exec -T -e FLASK_APP=wsgi.py backend flask db upgrade
