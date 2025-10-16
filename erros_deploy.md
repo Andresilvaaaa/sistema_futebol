@@ -1,256 +1,327 @@
-Annotations
-1 error
-⚛️ Build & Push Frontend image
-buildx failed with: ERROR: failed to build: failed to solve: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1
-🚀 Build & Deploy
-failed 20 minutes ago in 2m 28s
-Search logs
-2s
-0s
-7s
-4s
-0s
-0s
-1m 29s
-39s
-Run docker/build-push-action@v5
-GitHub Actions runtime token ACs
-Docker info
-Proxy configuration
-Buildx version
-Builder info
-/usr/bin/docker buildx build --build-arg NEXT_PUBLIC_API_URL=http://backend:5000 --cache-from type=gha --cache-to type=gha,mode=max --file frontend/Dockerfile --iidfile /home/runner/work/_temp/docker-actions-toolkit-fUQtCs/build-iidfile-47c83f645a.txt --attest type=provenance,mode=max,builder-id=https://github.com/***/sistema_futebol/actions/runs/18565428784 --tag ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest --tag ghcr.io/andresilvaaaa/sistema-futebol-frontend:4f1feeabfe7e5a9f76c992ba0ca5926efdeacf46 --metadata-file /home/runner/work/_temp/docker-actions-toolkit-fUQtCs/build-metadata-792b700005.json --push .
-#0 building with "builder-fbddf4b0-9e20-4998-80af-adc10699370e" instance using docker-container driver
+Run appleboy/ssh-action@master
+Run echo "$GITHUB_ACTION_PATH" >> $GITHUB_PATH
+Run entrypoint.sh
+Downloading drone-ssh-1.8.1-linux-amd64 from https://github.com/appleboy/drone-ssh/releases/download/v1.8.1
+======= CLI Version Information =======
+Drone SSH version 1.8.1
+=======================================
+main.Plugin {
+   Config: main.Config {
+      Key: "***
+***
+***
+***
+***
+***
+***",
+      Passphrase: "",
+      KeyPath: "",
+      Username: "***",
+      Password: "",
+      Host: []string:1:1 {
+         "***",
+      },
+      Port: ***,
+      Protocol: "tcp",
+      Fingerprint: "",
+      Timeout: 30s,
+      CommandTimeout: 30m0s,
+      Script: []string:1:1 {
+         "set -e
+echo "✅ Deploy iniciado!"
+echo "📍 Servidor: $(hostname)"
+echo "👤 Usuário: $(whoami)"
 
-#1 [internal] load build definition from Dockerfile
-#1 DONE 0.0s
+# Verificar Docker
+docker --version
+docker compose version
 
-#1 [internal] load build definition from Dockerfile
-#1 transferring dockerfile: 981B done
-#1 DONE 0.0s
+# Criar diretório do projeto
+mkdir -p ~/TMS_FLASK_REACT
+cd ~/TMS_FLASK_REACT
 
-#2 [auth] library/node:pull token for registry-1.docker.io
-#2 DONE 0.0s
+# Clone ou atualize repositório
+if [ -d ".git" ]; then
+  echo "📂 Atualizando repositório..."
+  git fetch --all
+  git reset --hard origin/main
+else
+  echo "📥 Clonando repositório..."
+  git clone https://github.com/${GITHUB_REPOSITORY}.git .
+fi
 
-#3 [internal] load metadata for docker.io/library/node:20-alpine
-#3 DONE 0.3s
+# Criar/atualizar .env para docker compose (variáveis de produção)
+echo "🔐 Atualizando .env..."
+cat > .env <<EOF
+DATABASE_URL=${PROD_DATABASE_URL}
+SECRET_KEY=${PROD_SECRET_KEY}
+JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
+CORS_ORIGINS=${PROD_CORS_ORIGINS}
+EOF
 
-#4 [internal] load .dockerignore
-#4 transferring context: 2B done
-#4 DONE 0.0s
+# Verificar se os Dockerfiles existem e subir com build
+if [ -f "docker-compose.yml" ]; then
+  echo "🐳 Docker Compose encontrado!"
+  # Parar containers antigos
+  docker compose down || true
+  # Construir e iniciar containers
+  docker compose up -d --build
+  # Verificar status
+  docker compose ps
+else
+  echo "⚠️ docker-compose.yml não encontrado"
+  echo "📁 Estrutura do projeto:"
+  ls -la
+fi
 
-#5 importing cache manifest from gha:3784034962909325141
-#5 DONE 0.1s
+echo "🎉 Deploy concluído!"
+echo "📅 $(date)"
+fi
 
-#6 [builder 1/7] FROM docker.io/library/node:20-alpine@sha256:1ab6fc5a31d515dc7b6b25f6acfda2001821f2c2400252b6cb61044bd9f9ad48
-#6 resolve docker.io/library/node:20-alpine@sha256:1ab6fc5a31d515dc7b6b25f6acfda2001821f2c2400252b6cb61044bd9f9ad48 done
-#6 ...
+# Login no GHCR para pull
+echo "${GHCR_TOKEN}" | docker login ${REGISTRY} -u "${GHCR_USER}" --password-stdin
 
-#7 [internal] load build context
-#7 transferring context: 815.15kB 0.0s done
-#7 DONE 0.0s
+# Criar/atualizar .env para o docker-compose
+cat > .env <<ENVFILE
+IMAGE_NAMESPACE=${REGISTRY}/${OWNER_LC}
+DATABASE_URL=${PROD_DATABASE_URL}
+SECRET_KEY=${PROD_SECRET_KEY}
+JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
+CORS_ORIGINS=${PROD_CORS_ORIGINS}
+ENVFILE
 
-#6 [builder 1/7] FROM docker.io/library/node:20-alpine@sha256:1ab6fc5a31d515dc7b6b25f6acfda2001821f2c2400252b6cb61044bd9f9ad48
-#6 sha256:f2fbe8556258562779088bb23277d1d0b7e43fc6ddd52623166a2ac6d92bc73a 1.26MB / 1.26MB 0.0s done
-#6 sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c988***e5dfa1b 3.80MB / 3.80MB 0.1s done
-#6 extracting sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c988***e5dfa1b
-#6 sha256:c74c90aa7c8726728fa9d2e330254ef29381efbd566aaee9933c3113c26f20ce 445B / 445B 0.1s done
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 2.10MB / 42.75MB 0.2s
-#6 extracting sha256:2d35ebdb57d9971fea0cac1582aa78935adf8058b2cc32db163c988***e5dfa1b 0.1s done
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 9.44MB / 42.75MB 0.3s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 13.63MB / 42.75MB 0.5s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 16.78MB / 42.75MB 0.6s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 19.92MB / 42.75MB 0.8s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 23.07MB / 42.75MB 0.9s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 26.21MB / 42.75MB 1.1s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 31.46MB / 42.75MB 1.2s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 36.70MB / 42.75MB 1.4s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 42.75MB / 42.75MB 1.5s
-#6 sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 42.75MB / 42.75MB 1.5s done
-#6 extracting sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c
-#6 extracting sha256:c087321cece4f408fdac87711c4c5c51945101848dffd8848840912c1fceb02c 0.9s done
-#6 DONE 2.4s
+# Docker Compose
+docker compose pull
+docker compose down
+docker compose up -d
 
-#6 [builder 1/7] FROM docker.io/library/node:20-alpine@sha256:1ab6fc5a31d515dc7b6b25f6acfda2001821f2c2400252b6cb61044bd9f9ad48
-#6 extracting sha256:f2fbe8556258562779088bb23277d1d0b7e43fc6ddd52623166a2ac6d92bc73a 0.0s done
-#6 extracting sha256:c74c90aa7c8726728fa9d2e330254ef29381efbd566aaee9933c3113c26f20ce done
-#6 DONE 2.4s
+# Aplicar migrações Alembic automaticamente no backend
+docker compose exec -T -e FLASK_APP=wsgi.py backend flask db upgrade",
+      },
+      ScriptStop: false,
+      Envs: []string:5:8 {
+         "PROD_DATABASE_URL",
+         "PROD_SECRET_KEY",
+         "PROD_JWT_SECRET_KEY",
+         "PROD_CORS_ORIGINS",
+         "GITHUB_REPOSITORY",
+      },
+      Proxy: easyssh.DefaultConfig {
+         User: "",
+         Server: "",
+         Key: "",
+         KeyPath: "",
+         Port: "***",
+         Protocol: "tcp",
+         Passphrase: "",
+         Password: "",
+         Timeout: 30s,
+         Ciphers: []string(nil),
+         KeyExchanges: []string(nil),
+         Fingerprint: "",
+         UseInsecureCipher: false,
+      },
+      Debug: true,
+      Sync: false,
+      Ciphers: []string(nil),
+      UseInsecureCipher: false,
+      EnvsFormat: "",
+      AllEnvs: false,
+      RequireTty: false,
+   },
+   Writer: &os.File {#1
+      file: &os.file {#2
+         pfd: poll.FD {
+            fdmu: poll.fdMutex {
+               state: 0,
+               rsema: 0,
+               wsema: 0,
+            },
+            Sysfd: 1,
+            SysFile: poll.SysFile {
+               iovecs: *[]syscall.Iovec(nil),
+            },
+            pd: poll.pollDesc {
+               runtimeCtx: 0x0,
+            },
+            csema: 0,
+            isBlocking: 1,
+            IsStream: true,
+            ZeroReadIsEOF: true,
+            isFile: true,
+         },
+         name: "/dev/stdout",
+         dirinfo: atomic.Pointer[os.dirInfo] {
+            _: [0]*os.dirInfo {},
+            _: atomic.noCopy {},
+            v: unsafe.Pointer(0x0),
+         },
+         nonblock: false,
+         stdoutOrErr: true,
+         appendMode: false,
+      },
+   },
+}
+======CMD======
+set -e
+echo "✅ Deploy iniciado!"
+echo "📍 Servidor: $(hostname)"
+echo "👤 Usuário: $(whoami)"
 
-#8 [runner 2/5] WORKDIR /app
-#8 DONE 0.1s
+# Verificar Docker
+docker --version
+docker compose version
 
-#9 [builder 2/7] WORKDIR /app/frontend
-#9 DONE 0.1s
+# Criar diretório do projeto
+mkdir -p ~/TMS_FLASK_REACT
+cd ~/TMS_FLASK_REACT
 
-#10 [builder 3/7] RUN corepack enable
-#10 DONE 0.1s
+# Clone ou atualize repositório
+if [ -d ".git" ]; then
+  echo "📂 Atualizando repositório..."
+  git fetch --all
+  git reset --hard origin/main
+else
+  echo "📥 Clonando repositório..."
+  git clone https://github.com/${GITHUB_REPOSITORY}.git .
+fi
 
-#11 [builder 4/7] COPY frontend/package.json frontend/pnpm-lock.yaml ./
-#11 DONE 0.0s
+# Criar/atualizar .env para docker compose (variáveis de produção)
+echo "🔐 Atualizando .env..."
+cat > .env <<EOF
+DATABASE_URL=${PROD_DATABASE_URL}
+SECRET_KEY=${PROD_SECRET_KEY}
+JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
+CORS_ORIGINS=${PROD_CORS_ORIGINS}
+EOF
 
-#12 [builder 5/7] RUN pnpm install --frozen-lockfile
-#12 0.288 ! Corepack is about to download https://registry.npmjs.org/pnpm/-/pnpm-10.18.3.tgz
-#12 1.315 Lockfile is up to date, resolution step is skipped
-#12 1.393 Progress: resolved 1, reused 0, downloaded 0, added 0
-#12 1.481 Packages: +480
-#12 1.481 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#12 2.393 Progress: resolved 480, reused 0, downloaded 115, added 108
-#12 3.392 Progress: resolved 480, reused 0, downloaded 143, added 129
-#12 4.393 Progress: resolved 480, reused 0, downloaded 153, added 132
-#12 5.393 Progress: resolved 480, reused 0, downloaded 187, added 144
-#12 6.394 Progress: resolved 480, reused 0, downloaded 410, added 406
-#12 7.394 Progress: resolved 480, reused 0, downloaded 479, added 479
-#12 8.397 Progress: resolved 480, reused 0, downloaded 480, added 480, done
-#12 8.692 
-#12 8.692 dependencies:
-#12 8.692 + @hookform/resolvers 5.2.2
-#12 8.692 + @radix-ui/react-accordion 1.2.12
-#12 8.692 + @radix-ui/react-alert-dialog 1.1.15
-#12 8.692 + @radix-ui/react-aspect-ratio 1.1.7
-#12 8.692 + @radix-ui/react-avatar 1.1.10
-#12 8.692 + @radix-ui/react-checkbox 1.3.3
-#12 8.692 + @radix-ui/react-collapsible 1.1.12
-#12 8.692 + @radix-ui/react-context-menu 2.2.16
-#12 8.692 + @radix-ui/react-dialog 1.1.15
-#12 8.692 + @radix-ui/react-dropdown-menu 2.1.16
-#12 8.692 + @radix-ui/react-hover-card 1.1.15
-#12 8.692 + @radix-ui/react-label 2.1.7
-#12 8.692 + @radix-ui/react-menubar 1.1.16
-#12 8.692 + @radix-ui/react-navigation-menu 1.2.14
-#12 8.692 + @radix-ui/react-popover 1.1.15
-#12 8.692 + @radix-ui/react-progress 1.1.7
-#12 8.692 + @radix-ui/react-radio-group 1.3.8
-#12 8.692 + @radix-ui/react-scroll-area 1.2.10
-#12 8.692 + @radix-ui/react-select 2.2.6
-#12 8.692 + @radix-ui/react-separator 1.1.7
-#12 8.692 + @radix-ui/react-slider 1.3.6
-#12 8.692 + @radix-ui/react-slot 1.2.3
-#12 8.692 + @radix-ui/react-switch 1.2.6
-#12 8.692 + @radix-ui/react-tabs 1.1.13
-#12 8.692 + @radix-ui/react-toast 1.2.15
-#12 8.692 + @radix-ui/react-toggle 1.1.10
-#12 8.692 + @radix-ui/react-toggle-group 1.1.11
-#12 8.692 + @radix-ui/react-tooltip 1.2.8
-#12 8.692 + @vercel/analytics 1.5.0
-#12 8.692 + autoprefixer 10.4.21
-#12 8.692 + class-variance-authority 0.7.1
-#12 8.692 + clsx 2.1.1
-#12 8.692 + cmdk 1.1.1
-#12 8.692 + date-fns 4.1.0
-#12 8.692 + embla-carousel-react 8.6.0
-#12 8.692 + geist 1.5.1
-#12 8.692 + input-otp 1.4.2
-#12 8.692 + lucide-react 0.544.0
-#12 8.692 + next 15.5.4
-#12 8.692 + next-themes 0.4.6
-#12 8.692 + react 19.1.1
-#12 8.692 + react-day-picker 9.11.0
-#12 8.692 + react-dom 19.1.1
-#12 8.692 + react-hook-form 7.63.0
-#12 8.692 + react-resizable-panels 3.0.6
-#12 8.692 + recharts 3.2.1
-#12 8.692 + sonner 2.0.7
-#12 8.692 + tailwind-merge 3.3.1
-#12 8.692 + tailwindcss-animate 1.0.7
-#12 8.692 + vaul 1.1.2
-#12 8.692 + zod 4.1.11
-#12 8.692 
-#12 8.692 devDependencies:
-#12 8.692 + @tailwindcss/postcss 4.1.13
-#12 8.692 + @testing-library/jest-dom 6.9.1
-#12 8.692 + @testing-library/react 14.3.1
-#12 8.692 + @testing-library/user-event 14.6.1
-#12 8.692 + @types/node 24.6.0
-#12 8.692 + @types/react 19.1.15
-#12 8.692 + @types/react-dom 19.1.9
-#12 8.692 + @vitejs/plugin-react 4.7.0
-#12 8.692 + @vitest/coverage-v8 1.6.1
-#12 8.692 + @vitest/ui 1.6.1
-#12 8.692 + jsdom 24.1.3
-#12 8.692 + postcss 8.5.6
-#12 8.692 + tailwindcss 4.1.13
-#12 8.692 + tw-animate-css 1.4.0
-#12 8.692 + typescript 5.9.2
-#12 8.692 + vite 5.4.20
-#12 8.692 + vitest 1.6.1
-#12 8.692 
-#12 8.692 ╭ Warning ─────────────────────────────────────────────────────────────────────╮
-#12 8.692 │                                                                              │
-#12 8.692 │   Ignored build scripts: @tailwindcss/oxide, esbuild, sharp.                 │
-#12 8.692 │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
-#12 8.692 │   to run scripts.                                                            │
-#12 8.692 │                                                                              │
-#12 8.692 ╰──────────────────────────────────────────────────────────────────────────────╯
-#12 8.692 
-#12 8.745 Done in 7.9s using pnpm v10.18.3
-#12 DONE 10.4s
+# Verificar se os Dockerfiles existem e subir com build
+if [ -f "docker-compose.yml" ]; then
+  echo "🐳 Docker Compose encontrado!"
+  # Parar containers antigos
+  docker compose down || true
+  # Construir e iniciar containers
+  docker compose up -d --build
+  # Verificar status
+  docker compose ps
+else
+  echo "⚠️ docker-compose.yml não encontrado"
+  echo "📁 Estrutura do projeto:"
+  ls -la
+fi
 
-#13 [builder 6/7] COPY frontend .
-#13 DONE 0.5s
+echo "🎉 Deploy concluído!"
+echo "📅 $(date)"
+fi
 
-#14 [builder 7/7] RUN pnpm build
-#14 0.408 
-#14 0.408 > my-v0-project@0.1.0 build /app/frontend
-#14 0.408 > next build
-#14 0.408 
-#14 1.113 Attention: Next.js now collects completely anonymous telemetry regarding usage.
-#14 1.113 This information is used to shape Next.js' roadmap and prioritize features.
-#14 1.113 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
-#14 1.113 https://nextjs.org/telemetry
-#14 1.113 
-#14 1.172    ▲ Next.js 15.5.4
-#14 1.172 
-#14 1.282    Creating an optimized production build ...
-#14 10.41  ⚠ Compiled with warnings in 8.1s
-#14 10.41 
-#14 10.41 ./app/dashboard/profile/page.tsx
-#14 10.41 Attempted import error: 'saveProfile' is not exported from '@/lib/profile-storage' (imported as 'saveProfile').
-#14 10.41 
-#14 10.41 Import trace for requested module:
-#14 10.41 ./app/dashboard/profile/page.tsx
-#14 10.41 
-#14 20.64  ⚠ Compiled with warnings in 8.1s
-#14 20.64 
-#14 20.64 ./app/dashboard/profile/page.tsx
-#14 20.64 Attempted import error: 'saveProfile' is not exported from '@/lib/profile-storage' (imported as 'saveProfile').
-#14 20.64 
-#14 20.64 Import trace for requested module:
-#14 20.64 ./app/dashboard/profile/page.tsx
-#14 20.64 
-#14 20.70  ✓ Compiled successfully in 16.4s
-#14 20.71    Skipping validation of types
-#14 20.71    Skipping linting
-#14 20.98    Collecting page data ...
-#14 ***.87    Generating static pages (0/13) ...
-#14 23.85 Error occurred prerendering page "/public/dashboard". Read more: https://nextjs.org/docs/messages/prerender-error
-#14 23.85 ReferenceError: Pie is not defined
-#14 23.85     at qQ (.next/server/app/public/dashboard/page.js:2:287792) {
-#14 23.85   digest: '838688307'
-#14 23.85 }
-#14 23.85 Export encountered an error on /public/dashboard/page: /public/dashboard, exiting the build.
-#14 23.86  ⨯ Next.js build worker exited with code: 1 and signal: null
-#14 23.90  ELIFECYCLE  Command failed with exit code 1.
-#14 ERROR: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1
-------
- > [builder 7/7] RUN pnpm build:
-20.98    Collecting page data ...
-***.87    Generating static pages (0/13) ...
-23.85 Error occurred prerendering page "/public/dashboard". Read more: https://nextjs.org/docs/messages/prerender-error
-23.85 ReferenceError: Pie is not defined
-23.85     at qQ (.next/server/app/public/dashboard/page.js:2:287792) {
-23.85   digest: '838688307'
-23.85 }
-23.85 Export encountered an error on /public/dashboard/page: /public/dashboard, exiting the build.
-23.86  ⨯ Next.js build worker exited with code: 1 and signal: null
-23.90  ELIFECYCLE  Command failed with exit code 1.
-------
-Dockerfile:***
---------------------
-  20 |     
-  21 |     # Build app (expects next.config.mjs with output: 'standalone')
-  *** | >>> RUN pnpm build
-  23 |     
-  24 |     # ---- Runtime stage ----
---------------------
-ERROR: failed to build: failed to solve: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1
-Error: buildx failed with: ERROR: failed to build: failed to solve: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1
+# Login no GHCR para pull
+echo "${GHCR_TOKEN}" | docker login ${REGISTRY} -u "${GHCR_USER}" --password-stdin
+
+# Criar/atualizar .env para o docker-compose
+cat > .env <<ENVFILE
+IMAGE_NAMESPACE=${REGISTRY}/${OWNER_LC}
+DATABASE_URL=${PROD_DATABASE_URL}
+SECRET_KEY=${PROD_SECRET_KEY}
+JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
+CORS_ORIGINS=${PROD_CORS_ORIGINS}
+ENVFILE
+
+# Docker Compose
+docker compose pull
+docker compose down
+docker compose up -d
+
+# Aplicar migrações Alembic automaticamente no backend
+docker compose exec -T -e FLASK_APP=wsgi.py backend flask db upgrade
+======END======
+======ENV======
+export PROD_DATABASE_URL='***
+'
+export PROD_SECRET_KEY='***'
+export PROD_JWT_SECRET_KEY='***'
+export PROD_CORS_ORIGINS='***
+'
+export GITHUB_REPOSITORY='Andresilvaaaa/sistema_futebol'
+======END======
+2025/10/16 ***:36:28 ssh: handshake failed: ssh: unable to authenticate, attempted methods [none publickey], no supported methods remain
+Error: Process completed with exit code 1.
+
+
+possivel sugestão para novo arquivo deploy! 
+
+name: Deploy TMS System
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📡 Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            echo "✅ Deploy iniciado!"
+            echo "📍 Servidor: $(hostname)"
+            echo "👤 Usuário: $(whoami)"
+            
+            # Verificar Docker
+            docker --version || echo "Docker não instalado"
+            docker compose version || echo "Docker Compose não instalado"
+            
+            # Criar diretório do projeto
+            mkdir -p ~/sistema_futebol
+            cd ~/sistema_futebol
+            
+            # Clone ou atualize repositório
+            if [ -d ".git" ]; then
+              echo "📂 Atualizando repositório..."
+              git fetch --all
+              git reset --hard origin/main
+            else
+              echo "📥 Clonando repositório..."
+              git clone https://github.com/Andresilvaaaa/sistema_futebol.git .
+            fi
+            
+            # Verificar estrutura
+            echo "📁 Estrutura do projeto:"
+            ls -la
+            
+            # Verificar docker-compose.yml
+            if [ -f "docker-compose.yml" ]; then
+              echo "🐳 Docker Compose encontrado!"
+              
+              # Criar .env se não existir
+              if [ ! -f ".env" ]; then
+                echo "🔐 Criando .env..."
+                cat > .env <<EOF
+            DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sistema_futebol
+            SECRET_KEY=your-secret-key-here-32-characters
+            JWT_SECRET_KEY=your-jwt-secret-key-32-characters
+            CORS_ORIGINS=http://31.97.166.28:3000
+            EOF
+              fi
+              
+              # Construir e iniciar
+              docker compose up -d --build
+              docker compose ps
+            else
+              echo "⚠️ docker-compose.yml não encontrado"
+            fi
+            
+            echo "🎉 Deploy concluído!"
+            echo "📅 $(date)"
