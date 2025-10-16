@@ -65,9 +65,10 @@ jobs:
       - name: 📡 Deploy via SSH (docker compose pull/up)
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.ssh_host }}
-          username: ${{ secrets.ssh_user }}
-          password: ${{ secrets.ssh_password }}
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           script_stop: true
           envs: IMAGE_NAMESPACE
           command_timeout: 30m
@@ -77,7 +78,7 @@ jobs:
             cd ~/fin_flask_react
 
             # Login no GHCR para pull (usa secrets do servidor)
-            echo "${{ secrets.ghcr_token }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.ghcr_user }}" --password-stdin
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.GHCR_USER }}" --password-stdin
 
             # Namespace das imagens (ex: ghcr.io/<owner>)
             export IMAGE_NAMESPACE="${{ env.REGISTRY }}/${{ github.repository_owner }}"
@@ -121,12 +122,16 @@ jobs:
             # Atualizar .env de produção (valores vindos de GitHub Secrets)
             cat > .env <<ENVFILE
             IMAGE_NAMESPACE=${IMAGE_NAMESPACE}
-            DATABASE_URL=${{ secrets.prod_database_url }}
-            SECRET_KEY=${{ secrets.prod_secret_key }}
-            JWT_SECRET_KEY=${{ secrets.prod_jwt_secret_key }}
-            CORS_ORIGINS=${{ secrets.prod_cors_origins }}
+            DATABASE_URL=${{ secrets.PROD_DATABASE_URL }}
+            SECRET_KEY=${{ secrets.PROD_SECRET_KEY }}
+            JWT_SECRET_KEY=${{ secrets.PROD_JWT_SECRET_KEY }}
+            CORS_ORIGINS=${{ secrets.PROD_CORS_ORIGINS }}
             ENVFILE
 
             # Atualizar e subir serviços
             docker compose pull
             docker compose up -d
+
+            # Aplicar migrações Alembic automaticamente no backend
+            # Usa FLASK_APP=wsgi.py para carregar a app factory
+            docker compose exec -T -e FLASK_APP=wsgi.py backend flask db upgrade

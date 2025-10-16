@@ -4,7 +4,16 @@ __pycache__/
 
 # Banco local
 backend/instance/futebol_dev.db
+# Ignorar quaisquer bancos locais na pasta instance (raiz e backend)
+instance/*.db
+backend/instance/*.db
 
 # Ambiente virtual
 venv/
-.env/
+# Arquivos de ambiente (evitar vazar segredos)
+.env
+backend/.env
+frontend/.env
+
+# Uploads locais (gerados em runtime)
+uploads/
