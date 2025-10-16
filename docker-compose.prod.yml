@@ -1,5 +1,3 @@
-version: '3.9'
-
 # Configuração específica para produção no VPS
 # Use .env para definir as variáveis de ambiente
 

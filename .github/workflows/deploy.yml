@@ -119,12 +119,14 @@ jobs:
 
             # Criar/atualizar .env para docker compose (variáveis de produção)
             echo "🔐 Atualizando .env..."
+            # Converter owner para lowercase
+            OWNER_LC=$(echo "${GITHUB_REPOSITORY%/*}" | tr '[:upper:]' '[:lower:]')
             cat > .env <<EOF
             DATABASE_URL=${PROD_DATABASE_URL}
             SECRET_KEY=${PROD_SECRET_KEY}
             JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
             CORS_ORIGINS=${PROD_CORS_ORIGINS}
-            IMAGE_NAMESPACE=ghcr.io/${GITHUB_REPOSITORY%/*}
+            IMAGE_NAMESPACE=ghcr.io/${OWNER_LC}
             NEXT_PUBLIC_API_URL=http://$(hostname -I | awk '{print $1}'):5001
             EOF
 
