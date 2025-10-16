@@ -124,11 +124,23 @@ jobs:
             SECRET_KEY=${PROD_SECRET_KEY}
             JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
             CORS_ORIGINS=${PROD_CORS_ORIGINS}
+            IMAGE_NAMESPACE=ghcr.io/${GITHUB_REPOSITORY%/*}
+            NEXT_PUBLIC_API_URL=http://$(hostname -I | awk '{print $1}'):5001
             EOF
 
             # Verificar se os Dockerfiles existem e subir com build
-            if [ -f "docker-compose.yml" ]; then
-              echo "🐳 Docker Compose encontrado!"
+            if [ -f "docker-compose.prod.yml" ]; then
+              echo "🐳 Docker Compose (produção) encontrado!"
+              # Parar containers antigos
+              docker compose -f docker-compose.prod.yml down || true
+              # Fazer pull das imagens mais recentes
+              docker compose -f docker-compose.prod.yml pull
+              # Iniciar containers
+              docker compose -f docker-compose.prod.yml up -d
+              # Verificar status
+              docker compose -f docker-compose.prod.yml ps
+            elif [ -f "docker-compose.yml" ]; then
+              echo "🐳 Docker Compose (desenvolvimento) encontrado!"
               # Parar containers antigos
               docker compose down || true
               # Construir e iniciar containers
@@ -136,7 +148,7 @@ jobs:
               # Verificar status
               docker compose ps
             else
-              echo "⚠️ docker-compose.yml não encontrado"
+              echo "⚠️ Nenhum docker-compose.yml encontrado"
               echo "📁 Estrutura do projeto:"
               ls -la
             fi

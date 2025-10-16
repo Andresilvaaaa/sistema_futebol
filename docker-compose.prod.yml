@@ -1,18 +1,11 @@
 version: '3.9'
 
-# Use .env (na raiz) para definir:
-# IMAGE_NAMESPACE=ghcr.io/<org_ou_usuario>
-# DATABASE_URL=postgresql://usuario:senha@host:5432/futebol_prod
-# SECRET_KEY=...
-# JWT_SECRET_KEY=...
-# CORS_ORIGINS=https://seu-dominio.com
+# Configuração específica para produção no VPS
+# Use .env para definir as variáveis de ambiente
 
 services:
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    image: sistema-futebol-backend:local
+    image: ${IMAGE_NAMESPACE}/sistema-futebol-backend:latest
     restart: unless-stopped
     environment:
       FLASK_ENV: production
@@ -26,22 +19,22 @@ services:
       - ./instance:/app/instance
       - ./uploads:/app/uploads
       - ./logs:/app/logs
+    networks:
+      - sistema-futebol
 
   frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://backend:5000
-    image: sistema-futebol-frontend:local
+    image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
     restart: unless-stopped
     environment:
       PORT: 3000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5001}
     ports:
       - "8080:3000"
     depends_on:
       - backend
+    networks:
+      - sistema-futebol
 
 networks:
-  default:
-    name: sistema-futebol
+  sistema-futebol:
+    driver: bridge
