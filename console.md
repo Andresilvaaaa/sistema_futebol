@@ -1,220 +1,121 @@
-Plano de Otimização (MVP estável, melhorias sem quebrar)
-=======================================================
+root@srv866884:~/sistema_futebol# # Verificar quando a imagem foi criada
+docker image inspect ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest | grep -A 5 "Created"
 
-Objetivos
-- Reduzir latência e eliminar N+1 sem alterar comportamentos.
-- Adotar compressão e rastreabilidade, preservando observabilidade atual.
-- Introduzir endpoint agregado seguro, com fallback no frontend.
+# Forçar pull da imagem mais recente
+docker pull ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest
 
-Filosofia
-- Incremental, reversível, medido por headers/logs.
-- Evitar overengineering e migrações desnecessárias.
+# Parar e remover container atual
+docker stop sistema_futebol_frontend_1
+docker rm sistema_futebol_frontend_1
 
-Fluxo de Execução
-- Passo A: Quick win — otimizar jogadores do período (joinedload).
-- Passo B: Adicionar Flask-Compress e `X-Trace-Id`, mantendo `X-Request-Duration-ms`.
-- Passo C: Criar `/api/cashflow/summary` com agregação por mês/ano; payload enxuto.
-- Passo D: Frontend com flag `NEXT_PUBLIC_USE_AGGREGATED_CF` e fallback.
-- Passo E: Avaliar necessidade de índices adicionais (somente se faltar). 
+# Recriar com nova imagem
+cd /root/sistema_futebol
+docker-compose -f docker-compose.prod.yml up -d frontend
 
-Observabilidade e Rollback
-- Já temos `X-Request-Duration-ms` e logs estruturados.
-- Adicionar `X-Trace-Id` para correlação.
-- Rollback: desativar flag no frontend e/ou desabilitar Compress.
+# Verificar logs
+docker logs sistema_futebol_frontend_1 --tail 10
+        "Created": "2025-10-17T02:17:50.279854531Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 312421973,
+latest: Pulling from andresilvaaaa/sistema-futebol-frontend
+Digest: sha256:c1483cbba0e5e874b71133c314646742836e543f6e3063bd8405c3a3a583026a
+Status: Image is up to date for ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest
+ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest
+sistema_futebol_frontend_1
+sistema_futebol_frontend_1
+WARNING: The Docker Engine you're using is running in swarm mode.
 
-Status Atual (encerramento do plano)
-- N+1 removido em jogadores do período via `joinedload`.
-- `Flask-Compress` habilitado; headers `X-Trace-Id` e `X-Request-Duration-ms` ativos.
-- Endpoint agregado `/api/cashflow/summary` implementado e validado.
-- Teste mínimo adicionado (`backend/tests/test_cashflow_summary.py`) cobrindo contrato e headers.
-- Documentação atualizada (`docs/*`): API, troubleshooting, getting-started, deployment, testing.
-- Índices compostos definidos nos modelos (sem migração aplicada), com diretrizes de criação concorrente em produção.
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
 
-----------------------------------------
-Passo A — Backend: eliminar N+1 em jogadores do período
-----------------------------------------
-Arquivo: `backend/blueprints/api/controllers.py`
-Objetivo: carregar `mp.player` sem disparar N consultas.
+To deploy your application across the swarm, use `docker stack deploy`.
 
-Snippet:
-```
-from sqlalchemy.orm import joinedload
-
-monthly_players = (
-    MonthlyPlayer.query
-    .options(joinedload(MonthlyPlayer.player))
-    .filter(and_(
-        MonthlyPlayer.monthly_period_id == period_id,
-        MonthlyPlayer.user_id == current_user_id
-    ))
-    .all()
-)
-```
-
-----------------------------------------
-Passo B — Backend: Compressão e Trace ID
-----------------------------------------
-Arquivo: `backend/__init__.py`
-Objetivo: habilitar compressão e correlação de requisições, sem duplicar timing.
-
-1) Dependência
-```
-# backend/requirements.txt
-Flask-Compress~=1.14.0
-```
-
-2) Inicialização
-```
-from flask_compress import Compress
-compress = Compress()
-
-def init_extensions(app):
-    # ... extensões existentes
-    compress.init_app(app)
-
-@app.before_request
-def _set_trace_id():
-    try:
-        g.trace_id = request.headers.get('X-Request-Id') or uuid.uuid4().hex[:8]
-    except Exception:
-        pass
-
-@app.after_request
-def _attach_trace_id(response):
-    try:
-        if getattr(g, 'trace_id', None):
-            response.headers['X-Trace-Id'] = g.trace_id
-    except Exception:
-        pass
-    return response
-```
-
-Nota: manter o middleware de timing já existente para `X-Request-Duration-ms`.
-
-----------------------------------------
-Passo C — Backend: endpoint agregado `/api/cashflow/summary`
-----------------------------------------
-Arquivo: `backend/blueprints/api/controllers.py`
-Objetivo: retornar por mês `{year, month, income, expenses, balance}`.
-
-Abordagem (duas agregações + merge):
-```
-from sqlalchemy import func
-
-@api_bp.route('/cashflow/summary', methods=['GET'])
-@jwt_required()
-def get_cashflow_summary():
-    current_user_id = str(get_jwt_identity())
-
-    income_rows = (
-        db.session.query(
-            MonthlyPeriod.year,
-            MonthlyPeriod.month,
-            func.sum(MonthlyPeriod.total_received).label('income')
-        )
-        .filter(MonthlyPeriod.user_id == current_user_id)
-        .group_by(MonthlyPeriod.year, MonthlyPeriod.month)
-        .all()
-    )
-
-    expense_rows = (
-        db.session.query(
-            Expense.year,
-            Expense.month,
-            func.sum(Expense.amount).label('expenses')
-        )
-        .filter(Expense.user_id == current_user_id)
-        .group_by(Expense.year, Expense.month)
-        .all()
-    )
-
-    idx = {}
-    for y, m, income in income_rows:
-        idx[(y, m)] = {'year': y, 'month': m, 'income': float(income), 'expenses': 0.0}
-    for y, m, expenses in expense_rows:
-        item = idx.setdefault((y, m), {'year': y, 'month': m, 'income': 0.0, 'expenses': 0.0})
-        item['expenses'] = float(expenses)
-
-    result = []
-    for (_y, _m), item in sorted(idx.items()):
-        balance = item['income'] - item['expenses']
-        item['balance'] = balance
-        result.append(item)
-
-    return jsonify(result), 200
-```
-
-----------------------------------------
-Passo D — Frontend: flag e fallback
-----------------------------------------
-Arquivo: `frontend/lib/cashflow-data.ts`
-Objetivo: usar o agregado quando disponível, senão manter método atual.
-
-Snippet:
-```
-import { api } from './api'
-
-export async function getCashflowByMonth(params?: { startYear?: number; endYear?: number }) {
-  const useAgg = process.env.NEXT_PUBLIC_USE_AGGREGATED_CF === 'true'
-  if (useAgg) {
-    try {
-      const res = await api.get('/cashflow/summary')
-      const data = (res.data || []) as Array<{ year: number; month: number; income: number; expenses: number; balance: number }>
-
-      const filtered = data.filter((d) => {
-        if (params?.startYear && d.year < params.startYear) return false
-        if (params?.endYear && d.year > params.endYear) return false
-        return true
-      })
-
-      return filtered.sort((a, b) => (a.year - b.year) || (a.month - b.month)).map((d) => ({
-        month: MONTH_NAMES[d.month - 1] || String(d.month),
-        year: d.year,
-        monthNumber: d.month,
-        income: d.income,
-        expenses: d.expenses,
-        balance: d.balance,
-        profit: d.balance,
-      }))
-    } catch (_) {
-      // fallback
-    }
-  }
-
-  // método atual (fallback)
-  // ... manter implementação existente
+sistema_futebol_backend_1 is up-to-date
+Creating sistema_futebol_frontend_1 ... done
+Error: Cannot find module '/app/server.js'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
 }
-```
 
-Enable flag: `NEXT_PUBLIC_USE_AGGREGATED_CF=true`.
+Node.js v20.19.5
+root@srv866884:~/sistema_futebol#
 
-----------------------------------------
-Passo E — Índices (só se necessário)
-----------------------------------------
-Status atual: modelos já definem índices úteis:
-- `idx_expenses_period (monthly_period_id, month, year)`
-- `idx_monthly_periods_unique (month, year, user_id)`
-- `idx_monthly_players_period`, `idx_casual_players_period`
+root@srv866884:~/sistema_futebol# # Clonar repositório no VPS
+cd /tmp
+git clone https://github.com/andresilvaaaa/sistema-futebol.git
+cd sistema-futebol
 
-Diretriz: não criar índices redundantes; avaliar planos de execução do endpoint agregado e só então adicionar.
+# Build local da imagem
+docker build -t sistema-futebol-frontend:local ./frontend
 
-----------------------------------------
-Checklist de Implementação
-----------------------------------------
-- Dia 1: aplicar `joinedload`; adicionar Flask-Compress; `X-Trace-Id` nos headers.
-- Dia 2: implementar `/api/cashflow/summary`; ativar flag no frontend com fallback; medir.
-- Dia 3: avaliar necessidade de novos índices; só criar se faltar.
+# Atualizar docker-compose para usar imagem local
+cd /root/sistema_futebol
+# Editar docker-compose.prod.yml para usar 'sistema-futebol-frontend:local'
+Cloning into 'sistema-futebol'...
+Username for 'https://github.com': Andresilvaaaa
+Password for 'https://Andresilvaaaa@github.com':
+remote: Invalid username or token. Password authentication is not supported for Git operations.
+fatal: Authentication failed for 'https://github.com/andresilvaaaa/sistema-futebol.git/'
+-bash: cd: sistema-futebol: No such file or directory
+[+] Building 0.0s (0/0)                                                                docker:default
+ERROR: failed to build: unable to prepare context: path "./frontend" not found
+root@srv866884:~/sistema_futebol#
 
-----------------------------------------
-Medição e Logs
-----------------------------------------
-- Backend: `X-Request-Duration-ms`, `X-Trace-Id`, logs `[Perf][Request]` já existentes.
-- Frontend: manter logs `[Perf][Cashflow]` e comparar antes/depois.
 
-----------------------------------------
-Troubleshooting
-----------------------------------------
-- 404/401 no agregado: validar `jwt_required` e `get_jwt_identity`.
-- Payload grande: filtrar por `startYear/endYear` no frontend.
-- Compressão não ativa: confirmar `Flask-Compress` no `requirements.txt` e `compress.init_app(app)`.
-- Índices: evitar duplicatas; preferir análise de plano antes de migrar.
+
+root@srv866884:~/sistema_futebol# echo "=== VERIFICANDO IMAGEM ATUAL ===" && \
+docker image inspect ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest | grep -A 5 "Created" && \
+echo "=== FORÇANDO PULL DA IMAGEM ===" && \
+docker pull ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest && \
+echo "=== RECRIANDO CONTAINER ===" && \
+docker stop sistema_futebol_frontend_1 && \
+docker rm sistema_futebol_frontend_1 && \
+cd /root/sistema_futebol && \
+docker-compose -f docker-compose.prod.yml up -d frontend && \
+sleep 5 && \
+echo "=== VERIFICANDO LOGS ===" && \
+docker logs sistema_futebol_frontend_1 --tail 10
+=== VERIFICANDO IMAGEM ATUAL ===
+        "Created": "2025-10-17T02:17:50.279854531Z",
+        "DockerVersion": "",
+        "Author": "",
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 312421973,
+=== FORÇANDO PULL DA IMAGEM ===
+latest: Pulling from andresilvaaaa/sistema-futebol-frontend
+Digest: sha256:c1483cbba0e5e874b71133c314646742836e543f6e3063bd8405c3a3a583026a
+Status: Image is up to date for ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest
+ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest
+=== RECRIANDO CONTAINER ===
+sistema_futebol_frontend_1
+sistema_futebol_frontend_1
+WARNING: The Docker Engine you're using is running in swarm mode.
+
+Compose does not use swarm mode to deploy services to multiple nodes in a swarm. All containers will be scheduled on the current node.
+
+To deploy your application across the swarm, use `docker stack deploy`.
+
+sistema_futebol_backend_1 is up-to-date
+Creating sistema_futebol_frontend_1 ... done
+=== VERIFICANDO LOGS ===
+Error: Cannot find module '/app/server.js'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.19.5
+root@srv866884:~/sistema_futebol#
+
+
+

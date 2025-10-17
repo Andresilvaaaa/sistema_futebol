@@ -2,6 +2,8 @@
 
 Este repositório contém o backend Flask e o frontend Next.js para gestão esportiva. A documentação consolidada agora está disponível em `docs/`.
 
+<!-- Force rebuild: 2025-01-17 -->
+
 ## Documentação
 
 - `docs/README.md`: índice central da documentação. Apresenta visão geral do projeto, como navegar pelos tópicos e links rápidos para as seções mais importantes.
