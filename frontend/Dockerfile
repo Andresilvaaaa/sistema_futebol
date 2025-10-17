@@ -1,36 +1,36 @@
-# Frontend Next.js - Production Dockerfile (multi-stage)
+# Frontend Next.js - Production Dockerfile
+# Build testado e funcionando no VPS em 17/10/2025
 
-# ---- Build stage ----
-FROM node:20-alpine AS builder
-WORKDIR /app/frontend
+FROM node:20-alpine
 
-# Enable pnpm via corepack
-RUN corepack enable
+WORKDIR /app
 
-# Dependencies first for better caching
+# Instalar pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copiar arquivos de dependências
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
+
+# Instalar dependências
 RUN pnpm install --frozen-lockfile
 
-# Copy source
-COPY frontend .
+# Copiar código fonte completo
+COPY frontend/ ./
 
-# Build-time API base (used by next.config.mjs rewrites)
+# Argumentos de build para configurar API URL
 ARG NEXT_PUBLIC_API_URL=http://backend:5000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NODE_ENV=production
 
-# Build app (expects next.config.mjs with output: 'standalone')
+# Build da aplicação Next.js
 RUN pnpm build
 
-# ---- Runtime stage ----
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production \
-    PORT=3000
-
-# Copy standalone server build output
-COPY --from=builder /app/frontend/.next/standalone ./
-COPY --from=builder /app/frontend/.next/static ./.next/static
-COPY --from=builder /app/frontend/public ./public
-
+# Expor porta 3000
 EXPOSE 3000
-CMD ["node", "server.js"]
+
+# Definir porta padrão
+ENV PORT=3000
+
+# Iniciar aplicação usando pnpm start
+# Nota: Funciona com output: 'standalone' no next.config.mjs
+CMD ["pnpm", "start"]
