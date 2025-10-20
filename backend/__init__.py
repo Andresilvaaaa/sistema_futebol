@@ -50,7 +50,7 @@ def create_app(config_name=None):
 
     # Em desenvolvimento, garantir que as tabelas do banco existam
     # Isso evita erros como "no such table" quando não há migrações aplicadas
-    if app.config.get('ENV', 'development') == 'development':
+    if config_name == 'development':
         try:
             with app.app_context():
                 # Garantir que os modelos sejam importados antes de criar as tabelas

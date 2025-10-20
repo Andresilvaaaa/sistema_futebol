@@ -38,7 +38,7 @@ def init_db(app):
         app: Instância da aplicação Flask
     """
     db.init_app(app)
-    migrate.init_app(app, db)
+    migrate.init_app(app, db, directory=os.path.join(app.root_path, 'migrations'))
 
     # Habilitar integridade referencial em SQLite (dev/test)
     with app.app_context():
