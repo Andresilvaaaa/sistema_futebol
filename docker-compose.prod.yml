@@ -2,12 +2,34 @@
 # Use .env para definir as variáveis de ambiente
 
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sistema_futebol_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sistema_futebol_prod
+      POSTGRES_USER: futebol_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1410andrE!1410andrE!}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - sistema-futebol
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U futebol_user -d sistema_futebol_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Flask
   backend:
     image: ${IMAGE_NAMESPACE}/sistema-futebol-backend:latest
     restart: unless-stopped
     environment:
       FLASK_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://futebol_user:1410andrE!1410andrE!@postgres:5432/sistema_futebol_prod}
       SECRET_KEY: ${SECRET_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       CORS_ORIGINS: ${CORS_ORIGINS}
@@ -17,9 +39,18 @@ services:
       - ./instance:/app/instance
       - ./uploads:/app/uploads
       - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - sistema-futebol
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # Frontend Next.js
   frontend:
     image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
     restart: unless-stopped
@@ -32,6 +63,10 @@ services:
       - backend
     networks:
       - sistema-futebol
+
+volumes:
+  postgres_data:
+    driver: local
 
 networks:
   sistema-futebol:
