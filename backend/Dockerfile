@@ -22,12 +22,11 @@ RUN pip install --upgrade pip && pip install -r backend/requirements.txt
 
 # Copy application source
 COPY backend ./backend
+COPY migrations ./migrations
 COPY wsgi.py ./wsgi.py
 
 # Create required directories
 RUN mkdir -p /app/logs /app/uploads /app/instance
-# Garantir compatibilidade com ferramentas que esperam /app/migrations
-RUN ln -s /app/backend/migrations /app/migrations
 
 EXPOSE 5000
 
