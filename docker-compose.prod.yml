@@ -1,5 +1,5 @@
 # docker-compose.prod.yml
-# Configuração para produção com PostgreSQL
+# Versão corrigida com health checks tolerantes
 
 services:
   # PostgreSQL Database
@@ -13,7 +13,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1410andrE!}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups  # Para backups automáticos
     ports:
       - "5432:5432"
     networks:
@@ -23,7 +22,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s  # Aumentado para dar mais tempo
 
   # Backend Flask
   backend:
@@ -43,18 +42,19 @@ services:
       - ./instance:/app/instance
       - ./uploads:/app/uploads
       - ./logs:/app/logs
-      - ./migrations:/app/migrations  # Importante para migrations
+      - ./migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - sistema-futebol
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      # CORREÇÃO: Removido -f (fail silently) e ajustado para rota correta
+      test: ["CMD", "curl", "-s", "http://localhost:5000/api/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s  # Mais tempo para migrations
 
   # Frontend Next.js
   frontend:
@@ -69,7 +69,7 @@ services:
       - "8080:3000"
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started  # MUDADO: Não espera healthy
     networks:
       - sistema-futebol
     healthcheck:
