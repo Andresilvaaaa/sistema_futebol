@@ -1,4 +1,5 @@
 """
+C:\Users\ANDREE\Desktop\sistema_futebol\backend\__init__.py
 Sistema de Futebol - Flask Application Factory
 Estrutura completa com blueprints, configurações e banco de dados
 """
@@ -245,10 +246,10 @@ def register_basic_routes(app):
     def health_check():
         """Endpoint para verificar se a aplicação está funcionando"""
         try:
-            # Testar conexão com banco de dados
-            db.session.execute('SELECT 1')
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
             db_status = 'connected'
-        except Exception:
+        except Exception as e:
             db_status = 'disconnected'
         
         return jsonify({
@@ -262,9 +263,10 @@ def register_basic_routes(app):
     @app.route('/api/health')
     def api_health_check():
         try:
-            db.session.execute('SELECT 1')
+            from sqlalchemy import text  # ✅ ADICIONAR ESTA LINHA!
+            db.session.execute(text('SELECT 1'))  # ✅ USAR text() ao invés de db.text()
             db_status = 'connected'
-        except Exception:
+        except Exception as e:
             db_status = 'disconnected'
 
         return jsonify({
