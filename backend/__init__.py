@@ -1,5 +1,4 @@
 """
-C:\Users\ANDREE\Desktop\sistema_futebol\backend\__init__.py
 Sistema de Futebol - Flask Application Factory
 Estrutura completa com blueprints, configurações e banco de dados
 """
@@ -263,8 +262,8 @@ def register_basic_routes(app):
     @app.route('/api/health')
     def api_health_check():
         try:
-            from sqlalchemy import text  # ✅ ADICIONAR ESTA LINHA!
-            db.session.execute(text('SELECT 1'))  # ✅ USAR text() ao invés de db.text()
+            from sqlalchemy import text  
+            db.session.execute(text('SELECT 1'))  
             db_status = 'connected'
         except Exception as e:
             db_status = 'disconnected'
