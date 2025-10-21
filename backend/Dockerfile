@@ -28,7 +28,12 @@ COPY wsgi.py ./wsgi.py
 # Create required directories
 RUN mkdir -p /app/logs /app/uploads /app/instance
 
+# Copy and setup entrypoint script
+COPY backend/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 5000
 
-# Gunicorn entrypoint using app factory created in backend/app.py
+# Use entrypoint script with Gunicorn as default command
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "backend.app:app"]
