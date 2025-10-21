@@ -17,6 +17,8 @@ import { Search, Download, Grid, List, Users, UserX, Loader2 } from "lucide-reac
 import { useToast } from "@/hooks/use-toast"
 import AuthGuard from "@/components/auth-guard"
 import PlayersDetailsDrawer from "@/components/players-details-drawer"
+import { BulkImportPlayersDialog } from "@/components/bulk-import-players-dialog"
+import { ExportButton } from "@/components/export-button"
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([])
@@ -334,10 +336,13 @@ export default function PlayersPage() {
             <p className="text-muted-foreground mt-1">Administre o elenco, pagamentos e estatísticas dos atletas</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Exportar
-            </Button>
+            <ExportButton 
+              targetId="players-export"
+              filename="jogadores.png"
+              label="Exportar"
+              pixelRatio={3}
+            />
+            <BulkImportPlayersDialog onImported={() => { loadPlayers(); loadStats(); }} />
             <AddPlayerDialog 
               onAddPlayer={handleAddPlayer} 
               loading={actionLoading === 'add'}
@@ -345,72 +350,74 @@ export default function PlayersPage() {
           </div>
         </div>
 
-        <StatsCards stats={stats} />
+        <div id="players-export" className="space-y-4">
+          <StatsCards stats={stats} />
 
-        <div className="flex items-center justify-between mb-6">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar jogadores..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex items-center justify-between mb-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar jogadores..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="w-48">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger size="sm" aria-label="Filtrar por status">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="pending">Pendente</SelectItem>
+                  <SelectItem value="delayed">Atrasado</SelectItem>
+                  <SelectItem value="inactive">Inativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant={viewMode === "grid" ? "default" : "outline"} size="sm" onClick={() => setViewMode("grid")}>
+                <Grid className="h-4 w-4" />
+              </Button>
+              <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="w-48">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger size="sm" aria-label="Filtrar por status">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-                <SelectItem value="delayed">Atrasado</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant={viewMode === "grid" ? "default" : "outline"} size="sm" onClick={() => setViewMode("grid")}>
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}>
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
+
+          <Tabs defaultValue="active" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="active" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Ativos ({activePlayers.length})
+              </TabsTrigger>
+              <TabsTrigger value="inactive" className="flex items-center gap-2">
+                <UserX className="h-4 w-4" />
+                Inativos ({inactivePlayers.length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="active" className="mt-6">
+              {renderPlayersList(filteredActivePlayers, false)}
+              {filteredActivePlayers.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">Nenhum jogador ativo encontrado.</p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="inactive" className="mt-6">
+              {renderPlayersList(filteredInactivePlayers, true)}
+              {filteredInactivePlayers.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">Nenhum jogador inativo encontrado.</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
-
-        <Tabs defaultValue="active" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="active" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Ativos ({activePlayers.length})
-            </TabsTrigger>
-            <TabsTrigger value="inactive" className="flex items-center gap-2">
-              <UserX className="h-4 w-4" />
-              Inativos ({inactivePlayers.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="active" className="mt-6">
-            {renderPlayersList(filteredActivePlayers, false)}
-            {filteredActivePlayers.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">Nenhum jogador ativo encontrado.</p>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="inactive" className="mt-6">
-            {renderPlayersList(filteredInactivePlayers, true)}
-            {filteredInactivePlayers.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">Nenhum jogador inativo encontrado.</p>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
 
         <EditPlayerDialog
           player={editingPlayer}

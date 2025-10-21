@@ -23,3 +23,15 @@ Este repositório contém o backend Flask e o frontend Next.js para gestão espo
 - A pasta `backend/migrations` é legado e não deve ser usada.
 - Rode `python -m flask db init`, `python -m flask db migrate`, `python -m flask db upgrade` no diretório raiz.
 - Se encontrar tabelas `_alembic_tmp_*` no SQLite, execute `python scripts/cleanup_alembic_tmp.py`.
+
+## Desenvolvimento local
+
+- Guia completo: `docs/DEV_ENV.md`
+- Backend (Flask):
+  - Pré-requisitos: `pip install -r backend/requirements.txt` e `flask db upgrade`
+  - Executar: `flask run -p 5000`
+  - Health: `http://localhost:5000/api/health`
+- Frontend (Next.js):
+  - Ambiente: `frontend/.env.local` com `NEXT_PUBLIC_API_URL=http://localhost:5000/api`
+  - Executar: `cd frontend && pnpm install && pnpm dev`
+- Login: use `/api/auth/register` e `/api/auth/login` para obter JWT e acessar rotas protegidas.

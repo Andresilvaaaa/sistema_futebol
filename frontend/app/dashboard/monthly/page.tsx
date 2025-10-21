@@ -20,6 +20,7 @@ import paymentsService from "@/lib/services/payments"
 import { statsService } from "@/lib/services/stats"
 import type { PaymentStats as ApiPaymentStats } from "@/types/api"
 import AuthGuard from "@/components/auth-guard"
+import { ExportButton } from "@/components/export-button"
 
 export default function MonthlyPage() {
   // Inicializa sempre no mês vigente
@@ -654,7 +655,7 @@ export default function MonthlyPage() {
       <div className="container-page">
         <MonthNavigation currentMonth={currentMonth} currentYear={currentYear} onMonthChange={handleMonthChange} />
 
-          <div className="space-y-4">
+          <div className="space-y-4" id="monthly-export">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <Card className="p-3">
                 <div className="flex items-center gap-2 mb-2">
@@ -715,10 +716,19 @@ export default function MonthlyPage() {
                   <Settings className="h-4 w-4 mr-2" />
                   Reajustar Mensalidade
                 </Button>
-                <Button variant="outline" size="sm" disabled={!currentPeriod}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Exportar
-                </Button>
+                {currentPeriod && currentPeriodPlayers.length > 0 ? (
+                  <ExportButton
+                    targetId="monthly-export"
+                    filename={`mensal-${formatMonthYear(currentMonth, currentYear)}.png`}
+                    label="Exportar"
+                    pixelRatio={3}
+                  />
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar
+                  </Button>
+                )}
                 <Button 
                   onClick={() => {
                     console.log('🔥 [MonthlyPage] CLIQUE NO BOTÃO IMPORTAR JOGADORES (TOP)!')
@@ -750,7 +760,7 @@ export default function MonthlyPage() {
                 </Button>
               </Card>
             ) : currentPeriodPlayers.length > 0 ? (
-              <Card>
+              <Card id="monthly-export">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="border-b">

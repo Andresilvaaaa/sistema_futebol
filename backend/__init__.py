@@ -159,15 +159,7 @@ def init_extensions(app):
     def missing_token_callback(error):
         return jsonify({'error': 'Token de autorização necessário'}), 401
     
-    # Custom token verification for development (accepts mock tokens)
-    @jwt.token_verification_loader
-    def verify_token_callback(jwt_header, jwt_payload):
-        # In development, accept mock tokens from frontend
-        if app.config.get('FLASK_ENV') == 'development':
-            # Check if it's a mock token format (starts with "eyJ" like real JWT)
-            return True
-        # In production, use default verification
-        return True
+    # Removed unsupported JWT token_verification_loader to align with Flask-JWT-Extended API
 
 
 def register_blueprints(app):
