@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import type { MonthlyPeriod, MonthlyPlayer, CasualPlayer } from "@/types/monthly"
 import { getCurrentMonth, formatMonthYear, computeMonthlyStats } from "@/lib/monthly-utils"
 import { MonthNavigation } from "@/components/month-navigation"
@@ -14,6 +14,7 @@ import { MonthlyFeeAdjustmentDialog } from "@/components/monthly-fee-adjustment-
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, DollarSign, TrendingUp, Download, UserPlus, Eye, Settings } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import paymentsService from "@/lib/services/payments"
@@ -38,6 +39,7 @@ export default function MonthlyPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [casualPlayerDialogOpen, setCasualPlayerDialogOpen] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [sortBy, setSortBy] = useState<'name' | 'pending' | 'paid'>('name')
   const [casualHistoryDialogOpen, setCasualHistoryDialogOpen] = useState(false)
   const [feeAdjustmentDialogOpen, setFeeAdjustmentDialogOpen] = useState(false)
   const [isCreatingMonth, setIsCreatingMonth] = useState(false)
@@ -147,6 +149,19 @@ export default function MonthlyPage() {
   const currentPeriodCasualPlayers = currentPeriod
     ? casualPlayers.filter((p) => p.monthlyPeriodId === currentPeriod.id)
     : []
+  const sortedCurrentPeriodPlayers = useMemo(() => {
+    const arr = [...currentPeriodPlayers]
+    if (sortBy === 'name') {
+      return arr.sort((a, b) => a.playerName.localeCompare(b.playerName, 'pt-BR', { sensitivity: 'base' }))
+    }
+    if (sortBy === 'pending') {
+      return arr.sort((a, b) => (a.status === b.status ? a.playerName.localeCompare(b.playerName, 'pt-BR', { sensitivity: 'base' }) : a.status === 'pending' ? -1 : 1))
+    }
+    if (sortBy === 'paid') {
+      return arr.sort((a, b) => (a.status === b.status ? a.playerName.localeCompare(b.playerName, 'pt-BR', { sensitivity: 'base' }) : a.status === 'paid' ? -1 : 1))
+    }
+    return arr
+  }, [currentPeriodPlayers, sortBy])
 
   const calculatePendingMonths = (playerId: string): number => {
     const playerPeriods = monthlyPlayers.filter((p) => p.playerId === playerId && p.status === "pending")
@@ -707,6 +722,16 @@ export default function MonthlyPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Jogadores - Pagamentos Mensais</h2>
               <div className="flex gap-2">
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'name' | 'pending' | 'paid')}>
+                  <SelectTrigger size="sm" className="w-[200px]">
+                    <SelectValue placeholder="Ordenar por" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="name">Nome (A–Z)</SelectItem>
+                    <SelectItem value="pending">Status (Pendentes primeiro)</SelectItem>
+                    <SelectItem value="paid">Status (Pagos primeiro)</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   variant="outline"
                   size="sm"
@@ -775,7 +800,7 @@ export default function MonthlyPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {currentPeriodPlayers.map((player, index) => (
+                      {sortedCurrentPeriodPlayers.map((player, index) => (
                         <tr key={player.id} className="border-b hover:bg-muted/50">
                           <td className="p-4">
                             <div className="flex items-center gap-3">

@@ -72,7 +72,7 @@ class Player(db.Model):
         if status not in valid_statuses:
             raise ValueError(f"Status deve ser um dos: {valid_statuses}")
         return status
-    
+
     @validates('email')
     def validate_email(self, key, email):
         if email and '@' not in email:  # Só valida se email foi fornecido
@@ -136,7 +136,7 @@ class MonthlyPeriod(db.Model):
         foreign_keys=lambda: [Expense.monthly_period_id, Expense.user_id],
         overlaps="expenses,monthly_period"
     )
-    
+
     @validates('month')
     def validate_month(self, key, month):
         if not 1 <= month <= 12:
@@ -189,7 +189,7 @@ class MonthlyPlayer(db.Model):
     player = relationship("Player", back_populates="monthly_payments")
     monthly_period = relationship("MonthlyPeriod", back_populates="monthly_players")
     user = relationship("User", back_populates="monthly_players")
-    
+
     @property
     def effective_monthly_fee(self):
         """Retorna a taxa efetiva (customizada se definida, senão a padrão)"""
@@ -230,7 +230,7 @@ class CasualPlayer(db.Model):
     # Relacionamentos simplificados
     monthly_period = relationship("MonthlyPeriod", back_populates="casual_players")
     user = relationship("User", back_populates="casual_players")
-    
+
     @validates('status')
     def validate_status(self, key, status):
         valid_statuses = [s.value for s in PaymentStatus]
@@ -289,7 +289,7 @@ class Expense(db.Model):
         if not 1 <= month <= 12:
             raise ValueError("Mês deve estar entre 1 e 12")
         return month
-    
+
     @validates('amount')
     def validate_amount(self, key, amount):
         if amount <= 0:
@@ -328,6 +328,8 @@ class User(db.Model):
     email = Column(String(100), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    # Saldo inicial do fluxo de caixa (configurável por usuário)
+    initial_balance = Column(Numeric(10, 2), nullable=False, default=0.00)
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

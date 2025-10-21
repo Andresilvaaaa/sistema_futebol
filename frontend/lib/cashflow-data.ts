@@ -139,3 +139,21 @@ export async function getCashflowSummary(financials?: MonthlyFinancials[]): Prom
   const totalProfit = currentBalance
   return { totalIncome, totalExpenses, currentBalance, totalProfit }
 }
+
+// ===== Saldo inicial (settings) =====
+export async function getInitialBalance(): Promise<number> {
+  try {
+    const resp = await api.get<{ initial_balance: number }>("/api/cashflow/settings")
+    const value = Number((resp as any)?.initial_balance ?? 0)
+    return isNaN(value) ? 0 : value
+  } catch (_e) {
+    return 0
+  }
+}
+
+export async function updateInitialBalance(value: number): Promise<number> {
+  const payload = { initial_balance: Number(value) }
+  const resp = await api.put<{ initial_balance: number }>("/api/cashflow/settings", payload)
+  const v = Number((resp as any)?.initial_balance ?? payload.initial_balance)
+  return isNaN(v) ? payload.initial_balance : v
+}

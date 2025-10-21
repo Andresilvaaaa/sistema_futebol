@@ -10,7 +10,7 @@ from datetime import datetime
 import uuid
 
 from ...services.db.connection import db
-from ...services.db.models import Player, MonthlyPeriod, MonthlyPlayer, CasualPlayer, Expense, PaymentStatus
+from ...services.db.models import Player, MonthlyPeriod, MonthlyPlayer, CasualPlayer, Expense, PaymentStatus, User
 from .schemas import (
     PlayerCreateSchema, PlayerUpdateSchema, PlayerResponseSchema,
     MonthlyPaymentCreateSchema, MonthlyPaymentResponseSchema,
@@ -1381,6 +1381,12 @@ def get_cashflow_summary():
         year = request.args.get('year', type=int)
         month = request.args.get('month', type=int)
 
+        # Saldo inicial do usuário
+        initial_balance = 0.0
+        user = db.session.query(User).filter(User.id == current_user_id).first()
+        if user and getattr(user, 'initial_balance', None) is not None:
+            initial_balance = float(user.initial_balance or 0)
+
         # Períodos com totais (expected/received)
         periods_q = db.session.query(MonthlyPeriod).filter(MonthlyPeriod.user_id == current_user_id)
         if year:
@@ -1431,12 +1437,47 @@ def get_cashflow_summary():
                 }
             })
 
-        # Ordena por ano/mês ascendente para consistência
+        # Ordena por ano/mês ascendente para consistência e calcula saldo acumulado com saldo inicial
         result.sort(key=lambda x: (x['period']['year'], x['period']['month']))
+        accumulated = initial_balance
+        for item in result:
+            accumulated += float(item['summary']['net'])
+            item['summary']['initial_balance'] = initial_balance
+            item['summary']['accumulated'] = accumulated
         return jsonify(result), 200
 
     except Exception as e:
         return jsonify({'error': f'Erro ao gerar resumo: {str(e)}'}), 500
+
+
+@api_bp.route('/cashflow/settings', methods=['GET'])
+@jwt_required()
+def get_cashflow_settings():
+    current_user_id = str(get_jwt_identity())
+    user = db.session.query(User).filter(User.id == current_user_id).first()
+    initial = float(user.initial_balance or 0) if user else 0.0
+    return jsonify({'initial_balance': initial}), 200
+
+
+@api_bp.route('/cashflow/settings', methods=['PUT'])
+@jwt_required()
+def update_cashflow_settings():
+    current_user_id = str(get_jwt_identity())
+    data = request.get_json() or {}
+    if 'initial_balance' not in data:
+        return jsonify({'error': 'initial_balance é obrigatório'}), 400
+    try:
+        initial = float(data['initial_balance'])
+    except Exception:
+        return jsonify({'error': 'initial_balance inválido'}), 400
+
+    user = db.session.query(User).filter(User.id == current_user_id).first()
+    if not user:
+        return jsonify({'error': 'Usuário não encontrado'}), 404
+
+    user.initial_balance = initial
+    db.session.commit()
+    return jsonify({'initial_balance': float(user.initial_balance)}), 200
 
 
 @api_bp.route('/monthly-periods/<period_id>/expenses', methods=['GET'])
