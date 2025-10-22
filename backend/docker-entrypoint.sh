@@ -87,10 +87,11 @@ validate_schema() {
     
     echo "🔍 [SCHEMA] Validating critical database schema..."
     
-    python3 << 'PYTHON_EOF' || {
+    # Executa o script Python e continua mesmo em caso de falha
+    if ! python3 << 'PYTHON_EOF'; then
         echo "⚠️  [SCHEMA] Schema validation failed, but continuing..."
         return 0
-    }
+    fi
 import sys
 import os
 sys.path.insert(0, '/app')
@@ -148,10 +149,11 @@ health_check() {
     
     echo "🏥 [HEALTH] Performing pre-start health check..."
     
-    python3 << 'PYTHON_EOF' || {
+    # Executa o script Python e continua mesmo em caso de falha
+    if ! python3 << 'PYTHON_EOF'; then
         echo "⚠️  [HEALTH] Health check warning, but continuing..."
         return 0
-    }
+    fi
 import sys
 sys.path.insert(0, '/app')
 
