@@ -161,10 +161,9 @@ jobs:
               docker compose -f docker-compose.prod.yml logs --tail=20 frontend
             fi
 
-+            echo "🧹 Limpeza pós-deploy (imagens antigas e logs)..."
-+            docker image prune -a -f || true
-+            docker builder prune -f || true
-+            find /var/lib/docker/containers -name '*-json.log' -exec truncate -s 0 {} + || true
-+            find backups -type f -mtime +7 -delete || true
-+
+            echo "🧹 Limpeza pós-deploy (imagens antigas e logs)..."
+            docker image prune -a -f || true
+            docker builder prune -f || true
+            find /var/lib/docker/containers -name '*-json.log' -exec truncate -s 0 {} + || true
+            find backups -type f -mtime +7 -delete || true
             echo "🎉 Deploy concluído em $(date)"

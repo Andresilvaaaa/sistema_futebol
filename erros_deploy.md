@@ -1,146 +1,189 @@
-root@srv866884:~# cd ~/sistema_futebol && \
-echo "🔍 Status:" && \
-docker compose -f docker-compose.prod.yml ps && \
-echo "" && \
-echo "📋 Últimos logs do backend:" && \
-docker compose -f docker-compose.prod.yml logs --tail=50 backend && \
-echo "" && \
-echo "🔍 Procurando erros:" && \
-docker compose -f docker-compose.prod.yml logs backend | grep -i "error\|exception\|traceback" | tail -20
-🔍 Status:
-NAME                       IMAGE                                                   COMMAND                  SERVICE    CREATED          STATUS                          PORTS
-sistema_futebol_backend    ghcr.io/andresilvaaaa/sistema-futebol-backend:latest    "/app/docker-entrypo…"   backend    13 minutes ago   Restarting (1) 58 seconds ago
-sistema_futebol_frontend   ghcr.io/andresilvaaaa/sistema-futebol-frontend:latest   "docker-entrypoint.s…"   frontend   13 minutes ago   Up 13 minutes (healthy)         0.0.0.0:8080->3000/tcp, [::]:8080->3000/tcp
-sistema_futebol_postgres   postgres:15-alpine                                      "docker-entrypoint.s…"   postgres   13 minutes ago   Up 13 minutes (healthy)         0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+.github/workflows/deploy.yml
+Testando novas features - melhorias no deploy #29
+Jobs
+Run details
+Workflow file for this run
+.github/workflows/deploy.yml at d642749
+name: Deploy Sistema Futebol
 
-📋 Últimos logs do backend:
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Will assume transactional DDL.
-sistema_futebol_backend  | ✅ [MIGRATIONS] Database migrations applied successfully
-sistema_futebol_backend  | 🔍 [SCHEMA] Validating critical database schema...
-sistema_futebol_backend  | ❌ [SCHEMA] Schema validation failed: 'Engine' object has no attribute 'execute'
-sistema_futebol_backend  | 🚀 [ENTRYPOINT] Starting backend initialization...
-sistema_futebol_backend  | 📊 [ENTRYPOINT] Configuration:
-sistema_futebol_backend  |   - FLASK_APP: backend.app:app
-sistema_futebol_backend  |   - FLASK_ENV: production
-sistema_futebol_backend  |   - DB_HOST: postgres:5432
-sistema_futebol_backend  |   - DB_NAME: futebol_db
-sistema_futebol_backend  | 🚀 [ENTRYPOINT] Starting initialization sequence...
-sistema_futebol_backend  | ⏳ [DB-WAIT] Waiting for PostgreSQL to be ready...
-sistema_futebol_backend  | ✅ [DB-WAIT] PostgreSQL is ready (attempt 1/30)
-sistema_futebol_backend  | 🔄 [MIGRATIONS] Applying database migrations...
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Will assume transactional DDL.
-sistema_futebol_backend  | ✅ [MIGRATIONS] Database migrations applied successfully
-sistema_futebol_backend  | 🔍 [SCHEMA] Validating critical database schema...
-sistema_futebol_backend  | ❌ [SCHEMA] Schema validation failed: 'Engine' object has no attribute 'execute'
-sistema_futebol_backend  | 🚀 [ENTRYPOINT] Starting backend initialization...
-sistema_futebol_backend  | 📊 [ENTRYPOINT] Configuration:
-sistema_futebol_backend  |   - FLASK_APP: backend.app:app
-sistema_futebol_backend  |   - FLASK_ENV: production
-sistema_futebol_backend  |   - DB_HOST: postgres:5432
-sistema_futebol_backend  |   - DB_NAME: futebol_db
-sistema_futebol_backend  | 🚀 [ENTRYPOINT] Starting initialization sequence...
-sistema_futebol_backend  | ⏳ [DB-WAIT] Waiting for PostgreSQL to be ready...
-sistema_futebol_backend  | ✅ [DB-WAIT] PostgreSQL is ready (attempt 1/30)
-sistema_futebol_backend  | 🔄 [MIGRATIONS] Applying database migrations...
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Will assume transactional DDL.
-sistema_futebol_backend  | ✅ [MIGRATIONS] Database migrations applied successfully
-sistema_futebol_backend  | 🔍 [SCHEMA] Validating critical database schema...
-sistema_futebol_backend  | ❌ [SCHEMA] Schema validation failed: 'Engine' object has no attribute 'execute'
-sistema_futebol_backend  | 🚀 [ENTRYPOINT] Starting backend initialization...
-sistema_futebol_backend  | 📊 [ENTRYPOINT] Configuration:
-sistema_futebol_backend  |   - FLASK_APP: backend.app:app
-sistema_futebol_backend  |   - FLASK_ENV: production
-sistema_futebol_backend  |   - DB_HOST: postgres:5432
-sistema_futebol_backend  |   - DB_NAME: futebol_db
-sistema_futebol_backend  | 🚀 [ENTRYPOINT] Starting initialization sequence...
-sistema_futebol_backend  | ⏳ [DB-WAIT] Waiting for PostgreSQL to be ready...
-sistema_futebol_backend  | ✅ [DB-WAIT] PostgreSQL is ready (attempt 1/30)
-sistema_futebol_backend  | 🔄 [MIGRATIONS] Applying database migrations...
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-sistema_futebol_backend  | INFO  [alembic.runtime.migration] Will assume transactional DDL.
-sistema_futebol_backend  | ✅ [MIGRATIONS] Database migrations applied successfully
-sistema_futebol_backend  | 🔍 [SCHEMA] Validating critical database schema...
-sistema_futebol_backend  | ❌ [SCHEMA] Schema validation failed: 'Engine' object has no attribute 'execute'
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
-🔍 Procurando erros:
-root@srv866884:~/sistema_futebol# docker compose -f docker-compose.prod.yml logs backend | grep -i "error\|exception\|traceback" | tail -20
-root@srv866884:~/sistema_futebol#
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-deploy:
+    name: 🚀 Build & Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🔤 Normalize owner
+        shell: bash
+        run: |
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "OWNER_LC=$OWNER_LC" >> $GITHUB_ENV
+      - name: 🐍 Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/sistema-futebol-backend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/sistema-futebol-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: ⚛️ Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.PROD_API_URL || 'http://31.97.166.28:5001' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/sistema-futebol-frontend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/sistema-futebol-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 📡 Deploy to VPS
+        uses: appleboy/ssh-action@master
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+          PROD_JWT_SECRET_KEY: ${{ secrets.PROD_JWT_SECRET_KEY }}
+          PROD_CORS_ORIGINS: ${{ secrets.PROD_CORS_ORIGINS }}
+          PROD_API_URL: ${{ secrets.PROD_API_URL || 'http://31.97.166.28:5001' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: 22
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,PROD_API_URL,POSTGRES_PASSWORD,GITHUB_REPOSITORY
+          command_timeout: 30m
+          script: |
+            set -e
+            echo "🚀 Deploy iniciado em $(date)"
+            
+            cd ~/sistema_futebol
+            
+            echo "📦 Criando backup pré-deploy..."
+            mkdir -p backups
+            docker compose -f docker-compose.prod.yml exec -T postgres \
+              pg_dump -Fc -U sistema_futebol sistema_futebol_prod \
+              > backups/backup_$(date +%Y%m%d_%H%M%S).dump || echo "⚠️ Backup falhou, continuando..."
+            
+            if [ -d ".git" ]; then
+              git fetch --all
+              git reset --hard origin/main
+            else
+              git clone https://github.com/${GITHUB_REPOSITORY}.git .
+            fi
+            
+            OWNER_LC=$(echo "${GITHUB_REPOSITORY%/*}" | tr '[:upper:]' '[:lower:]')
+            cat > .env <<EOF
+            DATABASE_URL=${PROD_DATABASE_URL}
+            SECRET_KEY=${PROD_SECRET_KEY}
+            JWT_SECRET_KEY=${PROD_JWT_SECRET_KEY}
+            CORS_ORIGINS=${PROD_CORS_ORIGINS}
+            IMAGE_NAMESPACE=ghcr.io/${OWNER_LC}
+            NEXT_PUBLIC_API_URL=${PROD_API_URL}
+            POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            EOF
+            
+            # Normalize line endings and ensure executable permissions for scripts
+            sed -i 's/\r$//' scripts/*.sh || true
+            chmod +x scripts/*.sh || true
+            
+            echo "📥 Baixando novas imagens..."
+            docker compose -f docker-compose.prod.yml pull
+            
+            echo "🔄 Aplicando deploy..."
+            
+            docker compose -f docker-compose.prod.yml stop backend || true
+            
+            if docker compose -f docker-compose.prod.yml up -d backend; then
+              echo "✅ Backend subiu normalmente"
+            else
+              echo "⚠️ Backend falhou, tentando com override..."
+              
+              cat > docker-compose.override.yml <<'OVERRIDE'
+            services:
+              backend:
+                entrypoint: []
+                command: sh -c "gunicorn -w 4 -b 0.0.0.0:5000 --timeout 120 backend.app:app"
+            OVERRIDE
+              
+              docker compose -f docker-compose.prod.yml -f docker-compose.override.yml up -d backend
+            fi
+            
+            docker compose -f docker-compose.prod.yml up -d frontend
+            
+            echo "⏳ Aguardando containers iniciarem..."
+            sleep 30
+            
+            echo "📊 Status dos containers:"
+            docker compose -f docker-compose.prod.yml ps
+            
+            echo "🧪 Testando backend..."
+            if curl -sf http://localhost:5001/api/health > /dev/null; then
+              echo "✅ Backend OK"
+            else
+              echo "❌ Backend falhou! Logs:"
+              docker compose -f docker-compose.prod.yml logs --tail=50 backend
+              exit 1
+            fi
+            
+            echo "🧪 Testando frontend..."
+            if curl -sf http://localhost:8080 > /dev/null; then
+              echo "✅ Frontend OK"
+            else
+              echo "⚠️ Frontend não respondeu"
+              docker compose -f docker-compose.prod.yml logs --tail=20 frontend
+            fi
++            echo "🧹 Limpeza pós-deploy (imagens antigas e logs)..."
+ Check failure on line 164 in .github/workflows/deploy.yml
 
 
-🎯 PROBLEMA IDENTIFICADO!
-❌ ERRO:
-❌ [SCHEMA] Schema validation failed: 'Engine' object has no attribute 'execute'
-O entrypoint está crashando na validação de schema porque está tentando usar engine.execute() (método antigo do SQLAlchemy 1.x) ao invés de session.execute() (SQLAlchemy 2.x).
+GitHub Actions
+/ .github/workflows/deploy.yml
+Invalid workflow file
+
+You have an error in your yaml syntax on line 164
++            docker image prune -a -f || true
++            docker builder prune -f || true
++            find /var/lib/docker/containers -name '*-json.log' -exec truncate -s 0 {} + || true
++            find backups -type f -mtime +7 -delete || true
++
+            echo "🎉 Deploy concluído em $(date)"
 
 
-Adicione esta variável de ambiente no serviço backend:
-yamlservices:
-  backend:
-    # ... outras configurações ...
-    environment:
-      # ... outras variáveis ...
-      SKIP_SCHEMA_VALIDATION: "true"  # ✅ ADICIONAR ESTA LINHA
-
-O código problemático deve estar assim:
-python# ❌ ERRADO (SQLAlchemy 1.x)
-inspector = inspect(db.engine)
-# ou
-db.engine.execute(text('SELECT 1'))
-Deve ser corrigido para:
-python# ✅ CORRETO (SQLAlchemy 2.x)
-from sqlalchemy import inspect, text
-
-inspector = inspect(db.engine)
-# ou para queries:
-with db.engine.connect() as conn:
-    conn.execute(text('SELECT 1'))      
-
-
-services:
-  backend:
-    image: ghcr.io/andresilvaaaa/sistema-futebol-backend:latest
-    container_name: sistema_futebol_backend
-    restart: unless-stopped
-    
-    # ✅ BYPASS DO ENTRYPOINT TEMPORÁRIO
-    entrypoint: []
-    command: >
-      sh -c "
-        echo '🔄 Aplicando migrations...' &&
-        flask db upgrade &&
-        echo '✅ Migrations OK' &&
-        echo '🚀 Iniciando Gunicorn...' &&
-        gunicorn -w 4 -b 0.0.0.0:5000 --timeout 120 backend.app:app
-      "
-    
-    environment:
-      DATABASE_URL: postgresql://sistema_futebol:${POSTGRES_PASSWORD:-1410andrE!}@postgres:5432/sistema_futebol_prod
-      SECRET_KEY: ${SECRET_KEY}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      CORS_ORIGINS: ${CORS_ORIGINS}
-      PYTHONUNBUFFERED: 1
-    
-    ports:
-      - "5001:5000"
-    
-    volumes:
-      - ./instance:/app/instance
-      - ./uploads:/app/uploads
-      - ./logs:/app/logs
-    
-    depends_on:
-      postgres:
-        condition: service_healthy
-    
-    networks:
-      - sistema-futebol
-    
-    healthcheck:
-      test: ["CMD", "curl", "-s", "http://localhost:5000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+    Testando novas features - melhorias no deploy
+.github/workflows/deploy.yml #29: Commit d642749 pushed by Andresilvaaaa
+deploy-improvements	
+1 minute ago
+ Failure

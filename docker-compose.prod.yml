@@ -58,11 +58,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
-+   logging:
-+     driver: json-file
-+     options:
-+       max-size: "10m"
-+       max-file: "3"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
@@ -85,11 +85,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-+   logging:
-+     driver: json-file
-+     options:
-+       max-size: "10m"
-+       max-file: "3"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
