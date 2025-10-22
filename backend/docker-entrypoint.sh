@@ -87,10 +87,7 @@ validate_schema() {
     
     echo "🔍 [SCHEMA] Validating critical database schema..."
     
-    python3 << 'PYTHON_EOF' || {
-        echo "⚠️  [SCHEMA] Schema validation failed, but continuing..."
-        return 0
-    }
+    python3 << 'PYTHON_EOF' || true
 import sys
 import os
 sys.path.insert(0, '/app')
@@ -133,7 +130,6 @@ try:
         
 except Exception as e:
     print(f'⚠️  [SCHEMA] Schema validation warning: {e}')
-    print('⚠️  [SCHEMA] Continuing anyway...')
     sys.exit(0)
 PYTHON_EOF
     
@@ -148,10 +144,7 @@ health_check() {
     
     echo "🏥 [HEALTH] Performing pre-start health check..."
     
-    python3 << 'PYTHON_EOF' || {
-        echo "⚠️  [HEALTH] Health check warning, but continuing..."
-        return 0
-    }
+    python3 << 'PYTHON_EOF' || true
 import sys
 sys.path.insert(0, '/app')
 
@@ -172,7 +165,6 @@ try:
         
 except Exception as e:
     print(f'⚠️  [HEALTH] Health check warning: {e}')
-    print('⚠️  [HEALTH] Continuing anyway...')
     sys.exit(0)
 PYTHON_EOF
     
