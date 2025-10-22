@@ -8,12 +8,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System deps (runtime libs for opencv, pdf2image, psycopg2)
+# System deps (runtime libs and Postgres client tools for migrations)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     poppler-utils \
     build-essential \
+    postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first to leverage cache
@@ -28,7 +30,13 @@ COPY wsgi.py ./wsgi.py
 # Create required directories
 RUN mkdir -p /app/logs /app/uploads /app/instance
 
+# Copy and setup entrypoint script
+COPY backend/docker-entrypoint.sh /app/docker-entrypoint.sh
+# Normalize line endings (Windows to Unix) and make executable
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 5000
 
-# Gunicorn entrypoint using app factory created in backend/app.py
+# Use entrypoint script with Gunicorn as default command
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "backend.app:app"]
