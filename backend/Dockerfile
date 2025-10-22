@@ -1,9 +1,10 @@
+# syntax=docker/dockerfile:1
+
 # Backend Flask - Production Dockerfile
-FROM python:3.11-slim AS base
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
     FLASK_ENV=production
 
 WORKDIR /app
@@ -16,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     postgresql-client \
     curl \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first to leverage cache
@@ -39,4 +41,4 @@ EXPOSE 5000
 
 # Use entrypoint script with Gunicorn as default command
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "backend.app:app"]
+CMD ["gunicorn", "-w", "3", "-b", "0.0.0.0:5000", "backend.app:app"]

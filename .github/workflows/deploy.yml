@@ -16,6 +16,7 @@ jobs:
   build-and-deploy:
     name: 🚀 Build & Deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: 📦 Checkout
@@ -31,7 +32,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 📤 Normalize owner
+      - name: 🔤 Normalize owner
         shell: bash
         run: |
           OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
@@ -71,12 +72,13 @@ jobs:
           PROD_JWT_SECRET_KEY: ${{ secrets.PROD_JWT_SECRET_KEY }}
           PROD_CORS_ORIGINS: ${{ secrets.PROD_CORS_ORIGINS }}
           PROD_API_URL: ${{ secrets.PROD_API_URL || 'http://31.97.166.28:5001' }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         with:
           host: ${{ secrets.VPS_HOST }}
           port: 22
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,PROD_API_URL,GITHUB_REPOSITORY
+          envs: PROD_DATABASE_URL,PROD_SECRET_KEY,PROD_JWT_SECRET_KEY,PROD_CORS_ORIGINS,PROD_API_URL,POSTGRES_PASSWORD,GITHUB_REPOSITORY
           command_timeout: 30m
           script: |
             set -e
@@ -84,7 +86,12 @@ jobs:
             
             cd ~/sistema_futebol
             
-            # Atualizar repositório
+            echo "📦 Criando backup pré-deploy..."
+            mkdir -p backups
+            docker compose -f docker-compose.prod.yml exec -T postgres \
+              pg_dump -Fc -U sistema_futebol sistema_futebol_prod \
+              > backups/backup_$(date +%Y%m%d_%H%M%S).dump || echo "⚠️ Backup falhou, continuando..."
+            
             if [ -d ".git" ]; then
               git fetch --all
               git reset --hard origin/main
@@ -92,7 +99,6 @@ jobs:
               git clone https://github.com/${GITHUB_REPOSITORY}.git .
             fi
             
-            # Atualizar .env
             OWNER_LC=$(echo "${GITHUB_REPOSITORY%/*}" | tr '[:upper:]' '[:lower:]')
             cat > .env <<EOF
             DATABASE_URL=${PROD_DATABASE_URL}
@@ -101,33 +107,63 @@ jobs:
             CORS_ORIGINS=${PROD_CORS_ORIGINS}
             IMAGE_NAMESPACE=ghcr.io/${OWNER_LC}
             NEXT_PUBLIC_API_URL=${PROD_API_URL}
+            POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
             EOF
             
-            # Deploy
-            docker compose -f docker-compose.prod.yml down || true
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+            # Normalize line endings and ensure executable permissions for scripts
+            sed -i 's/\r$//' scripts/*.sh || true
+            chmod +x scripts/*.sh || true
             
-            # Aguardar e verificar
+            echo "📥 Baixando novas imagens..."
+            docker compose -f docker-compose.prod.yml pull
+            
+            echo "🔄 Aplicando deploy..."
+            
+            docker compose -f docker-compose.prod.yml stop backend || true
+            
+            if docker compose -f docker-compose.prod.yml up -d backend; then
+              echo "✅ Backend subiu normalmente"
+            else
+              echo "⚠️ Backend falhou, tentando com override..."
+              
+              cat > docker-compose.override.yml <<'OVERRIDE'
+            services:
+              backend:
+                entrypoint: []
+                command: sh -c "gunicorn -w 4 -b 0.0.0.0:5000 --timeout 120 backend.app:app"
+            OVERRIDE
+              
+              docker compose -f docker-compose.prod.yml -f docker-compose.override.yml up -d backend
+            fi
+            
+            docker compose -f docker-compose.prod.yml up -d frontend
+            
             echo "⏳ Aguardando containers iniciarem..."
-            sleep 15
+            sleep 30
             
             echo "📊 Status dos containers:"
             docker compose -f docker-compose.prod.yml ps
             
             echo "🧪 Testando backend..."
-            if curl -f http://localhost:5001/health; then
+            if curl -sf http://localhost:5001/api/health > /dev/null; then
               echo "✅ Backend OK"
             else
-              echo "⚠️ Backend não respondeu"
+              echo "❌ Backend falhou! Logs:"
+              docker compose -f docker-compose.prod.yml logs --tail=50 backend
+              exit 1
             fi
             
             echo "🧪 Testando frontend..."
-            if curl -f http://localhost:8080; then
+            if curl -sf http://localhost:8080 > /dev/null; then
               echo "✅ Frontend OK"
             else
-              echo "⚠️ Frontend não respondeu, verificando logs..."
+              echo "⚠️ Frontend não respondeu"
               docker compose -f docker-compose.prod.yml logs --tail=20 frontend
             fi
-            
+
+            echo "🧹 Limpeza pós-deploy (imagens antigas e logs)..."
+            docker image prune -a -f || true
+            docker builder prune -f || true
+            find /var/lib/docker/containers -name '*-json.log' -exec truncate -s 0 {} + || true
+            find backups -type f -mtime +7 -delete || true
             echo "🎉 Deploy concluído em $(date)"

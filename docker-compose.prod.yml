@@ -1,8 +1,4 @@
-# docker-compose.prod.yml
-# Versão corrigida com health checks tolerantes
-
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: sistema_futebol_postgres
@@ -22,9 +18,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s  # Aumentado para dar mais tempo
+      start_period: 30s
 
-  # Backend Flask
   backend:
     image: ${IMAGE_NAMESPACE}/sistema-futebol-backend:latest
     container_name: sistema_futebol_backend
@@ -36,6 +31,14 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       CORS_ORIGINS: ${CORS_ORIGINS}
       PYTHONUNBUFFERED: 1
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: sistema_futebol_prod
+      DB_USER: sistema_futebol
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-1410andrE!}
+      SKIP_MIGRATIONS: ${SKIP_MIGRATIONS:-false}
+      SKIP_SCHEMA_VALIDATION: ${SKIP_SCHEMA_VALIDATION:-false}
+      SKIP_HEALTH_CHECK: ${SKIP_HEALTH_CHECK:-false}
     ports:
       - "5001:5000"
     volumes:
@@ -43,20 +46,24 @@ services:
       - ./uploads:/app/uploads
       - ./logs:/app/logs
       - ./migrations:/app/migrations
+      - ./scripts:/app/scripts:ro
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - sistema-futebol
     healthcheck:
-      # CORREÇÃO: Removido -f (fail silently) e ajustado para rota correta
-      test: ["CMD", "curl", "-s", "http://localhost:5000/api/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s  # Mais tempo para migrations
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Frontend Next.js
   frontend:
     image: ${IMAGE_NAMESPACE}/sistema-futebol-frontend:latest
     container_name: sistema_futebol_frontend
@@ -69,7 +76,7 @@ services:
       - "8080:3000"
     depends_on:
       backend:
-        condition: service_started  # MUDADO: Não espera healthy
+        condition: service_started
     networks:
       - sistema-futebol
     healthcheck:
@@ -78,6 +85,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
